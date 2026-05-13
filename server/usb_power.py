@@ -52,6 +52,12 @@ def get_port_status(hub: str, port: int) -> dict:
     port, so we have to filter to the right hub before reading the
     port line — otherwise we read the upstream's status (which never
     reports `connect`).
+
+    The status keywords (`power`, `enable`, `connect`, ...) appear
+    before the optional `[VVVV:PPPP Vendor Product ...]` device
+    descriptor, so we strip the descriptor first and tokenize the
+    rest — otherwise a product name containing "power" or "connect"
+    would false-match.
     """
     output = _run("-l", hub, "-p", str(port))
     in_target_hub = False
@@ -60,10 +66,11 @@ def get_port_status(hub: str, port: int) -> dict:
             in_target_hub = m.group(1) == hub
             continue
         if in_target_hub and (m := _PORT_LINE_RE.match(line)) and int(m.group(1)) == port:
-            flags = m.group(3)
+            flags_part = m.group(3).split("[", 1)[0]
+            tokens = flags_part.split()
             return {
-                "powered": "power" in flags,
-                "connected": "connect" in flags,
+                "powered": "power" in tokens,
+                "connected": "connect" in tokens,
             }
     raise ValueError(f"Port {port} not found on hub {hub}")
 
@@ -80,6 +87,11 @@ def power_off(hub: str, port: int) -> None:
     set_port_power(hub, port, on=False)
 
 
+# Module-global, intentionally unlocked. waitress serves requests on
+# multiple threads, but Python's GIL makes the single-assignment update
+# atomic and the worst-case race outcome is "valid value overwritten by
+# another valid value" — benign for a single-printer setup. Revisit if
+# we ever need per-printer caching for multiple devices.
 _last_known_port: tuple[str, int] | None = None
 
 
@@ -91,6 +103,8 @@ def find_or_recall_printer_port(
     Needed because once we power off the port, the device disappears from
     the USB tree — `find_printer_port` would return None and we'd have no
     way to power it back on. This falls back to the cached result.
+
+    Thread safety: best-effort, see `_last_known_port` comment above.
     """
     global _last_known_port
     found = find_printer_port(vendor_product_id)

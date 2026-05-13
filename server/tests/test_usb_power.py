@@ -87,6 +87,16 @@ class TestGetPortStatus:
         with pytest.raises(ValueError):
             usb_power.get_port_status("1-1", 99)
 
+    def test_device_name_with_power_word_does_not_false_match(self, mock_run):
+        # Hypothetical product whose name contains "power" and "connect" —
+        # status should reflect only the flag tokens, not the descriptor.
+        mock_run.return_value = _result(
+            "Current status for hub 1-1 [2109:3431 USB2.0 Hub, USB 2.10, 4 ports, ppps]\n"
+            "  Port 3: 0000 off [dead:beef PowerCo Connect-Pro 12345]\n"
+        )
+        s = usb_power.get_port_status("1-1", 3)
+        assert s == {"powered": False, "connected": False}
+
 
 class TestFindOrRecall:
     def setup_method(self):
