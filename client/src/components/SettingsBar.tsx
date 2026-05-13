@@ -3,6 +3,7 @@ import { TAPE_SIZES, LABEL_COLORS } from "../lib/constants";
 import { fetchPrinters } from "../lib/api";
 import type { TapeSize, Alignment, LabelColor } from "../types/label";
 import { useState } from "react";
+import { PowerToggle } from "./PowerToggle";
 
 export function SettingsBar() {
   const settings = useLabelStore((s) => s.settings);
@@ -65,6 +66,8 @@ export function SettingsBar() {
           </button>
         </>
       )}
+
+      <PowerToggle />
 
       <Field label="Tape (mm)">
         <select

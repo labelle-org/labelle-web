@@ -1,4 +1,9 @@
-import type { LabelWidget, LabelSettings, PrinterInfo } from "../types/label";
+import type {
+  LabelWidget,
+  LabelSettings,
+  PrinterInfo,
+  PowerStatus,
+} from "../types/label";
 
 interface PrintResponse {
   status: string;
@@ -7,6 +12,10 @@ interface PrintResponse {
 
 interface PrintersResponse {
   printers: PrinterInfo[];
+}
+
+interface PowerResponse extends PowerStatus {
+  status?: string;
 }
 
 export async function printLabel(
@@ -63,4 +72,38 @@ export async function fetchPrinters(): Promise<PrinterInfo[]> {
   }
   const data = (await res.json()) as PrintersResponse;
   return data.printers;
+}
+
+// 404 here means the server can't resolve a controllable USB port for
+// the Dymo — either no printer detected or no cached port. UI treats
+// that as "this deployment doesn't have USB power control" and hides
+// the toggle. Non-200/404 errors propagate so the user sees them.
+async function _readPowerResponse(res: Response): Promise<PowerStatus> {
+  if (!res.ok) {
+    const err = (await res.json()) as PrintResponse;
+    throw new Error(err.message);
+  }
+  const data = (await res.json()) as PowerResponse;
+  return {
+    hub: data.hub,
+    port: data.port,
+    powered: data.powered,
+    connected: data.connected,
+  };
+}
+
+export async function fetchPowerStatus(): Promise<PowerStatus | null> {
+  const res = await fetch("/api/power/status");
+  if (res.status === 404) return null;
+  return _readPowerResponse(res);
+}
+
+export async function powerOn(): Promise<PowerStatus> {
+  const res = await fetch("/api/power/on", { method: "POST" });
+  return _readPowerResponse(res);
+}
+
+export async function powerOff(): Promise<PowerStatus> {
+  const res = await fetch("/api/power/off", { method: "POST" });
+  return _readPowerResponse(res);
 }

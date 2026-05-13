@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fetchPrinters, printLabel, fetchServerPreview, uploadImage } from "./api";
+import {
+  fetchPrinters,
+  fetchPowerStatus,
+  powerOn,
+  powerOff,
+  printLabel,
+  fetchServerPreview,
+  uploadImage,
+} from "./api";
 import type { LabelWidget, LabelSettings } from "../types/label";
 
 const mockFetch = vi.fn();
@@ -133,6 +141,89 @@ describe("fetchServerPreview", () => {
     expect(mockFetch).toHaveBeenCalledWith("/api/preview", expect.objectContaining({
       signal: controller.signal,
     }));
+  });
+});
+
+describe("fetchPowerStatus", () => {
+  it("returns the power status on 200", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ hub: "1-1", port: 3, powered: true, connected: true }),
+    });
+
+    const result = await fetchPowerStatus();
+    expect(result).toEqual({ hub: "1-1", port: 3, powered: true, connected: true });
+    expect(mockFetch).toHaveBeenCalledWith("/api/power/status");
+  });
+
+  it("returns null on 404 (no controllable printer)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ status: "error", message: "Printer not detected" }),
+    });
+
+    const result = await fetchPowerStatus();
+    expect(result).toBeNull();
+  });
+
+  it("throws with server error message on 500", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ status: "error", message: "uhubctl failed" }),
+    });
+
+    await expect(fetchPowerStatus()).rejects.toThrow("uhubctl failed");
+  });
+});
+
+describe("powerOn", () => {
+  it("sends POST and returns the updated status", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: "success",
+        hub: "1-1",
+        port: 3,
+        powered: true,
+        connected: true,
+      }),
+    });
+
+    const result = await powerOn();
+    expect(result).toEqual({ hub: "1-1", port: 3, powered: true, connected: true });
+    expect(mockFetch).toHaveBeenCalledWith("/api/power/on", { method: "POST" });
+  });
+
+  it("throws with server error message on failure", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ status: "error", message: "uhubctl: hub not found" }),
+    });
+
+    await expect(powerOn()).rejects.toThrow("uhubctl: hub not found");
+  });
+});
+
+describe("powerOff", () => {
+  it("sends POST and returns the updated status", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: "success",
+        hub: "1-1",
+        port: 3,
+        powered: false,
+        connected: false,
+      }),
+    });
+
+    const result = await powerOff();
+    expect(result).toEqual({ hub: "1-1", port: 3, powered: false, connected: false });
+    expect(mockFetch).toHaveBeenCalledWith("/api/power/off", { method: "POST" });
   });
 });
 
