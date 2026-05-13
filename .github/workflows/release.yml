@@ -98,7 +98,31 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-      - name: Create GitHub Release
+      # If `.github/release-notes/<tag>.md` exists, use it as the
+      # release body (e.g. for a user-friendly feature announcement).
+      # Auto-generated notes (PR titles) are still appended underneath
+      # by softprops/action-gh-release. Older tags without a file get
+      # only the auto-generated notes — same as before.
+      - name: Find release notes file
+        id: notes
+        run: |
+          NOTES_FILE=".github/release-notes/${{ needs.tag.outputs.tag }}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release (with custom notes)
+        if: steps.notes.outputs.path != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.tag.outputs.tag }}
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: true
+
+      - name: Create GitHub Release (auto-generated only)
+        if: steps.notes.outputs.path == ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.tag.outputs.tag }}

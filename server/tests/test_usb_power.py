@@ -142,6 +142,75 @@ class TestPowerOnOff:
         ]
 
 
+class TestStatePersistence:
+    """The (hub, port) cache must survive a container restart so /api/power/on
+    can find the port even if the printer is currently powered off."""
+
+    def test_load_state_returns_none_when_file_missing(self, tmp_path):
+        assert usb_power._load_state(tmp_path / "absent.json") is None
+
+    def test_load_state_returns_tuple_when_file_valid(self, tmp_path):
+        p = tmp_path / "state.json"
+        p.write_text('{"hub": "1-1", "port": 3}')
+        assert usb_power._load_state(p) == ("1-1", 3)
+
+    def test_load_state_returns_none_when_json_corrupt(self, tmp_path):
+        p = tmp_path / "state.json"
+        p.write_text("{not json")
+        assert usb_power._load_state(p) is None
+
+    def test_load_state_returns_none_when_shape_wrong(self, tmp_path):
+        p = tmp_path / "state.json"
+        # port as string, not int
+        p.write_text('{"hub": "1-1", "port": "3"}')
+        assert usb_power._load_state(p) is None
+
+    def test_save_state_writes_round_trippable_json(self, tmp_path):
+        p = tmp_path / "state.json"
+        usb_power._save_state("2-4", 7, p)
+        assert usb_power._load_state(p) == ("2-4", 7)
+
+    def test_save_state_creates_parent_dirs(self, tmp_path):
+        p = tmp_path / "nested" / "dir" / "state.json"
+        usb_power._save_state("1-1", 3, p)
+        assert p.exists()
+
+    def test_save_state_swallows_write_errors(self, tmp_path):
+        # Make a path that can't be written (parent is a file, not a dir)
+        blocker = tmp_path / "blocker"
+        blocker.write_text("not a dir")
+        bad_path = blocker / "state.json"
+        # Should not raise — best-effort
+        usb_power._save_state("1-1", 3, bad_path)
+
+    def test_find_or_recall_persists_new_discovery_to_disk(
+        self, mock_run, tmp_path, monkeypatch
+    ):
+        state_file = tmp_path / "state.json"
+        monkeypatch.setattr(usb_power, "_STATE_FILE", state_file)
+        usb_power._last_known_port = None
+
+        mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
+        usb_power.find_or_recall_printer_port()
+
+        # Read it back through `_load_state()` with no arg so it
+        # resolves the same monkeypatched `_STATE_FILE`.
+        assert usb_power._load_state() == ("1-1", 3)
+
+    def test_find_or_recall_does_not_rewrite_unchanged_value(
+        self, mock_run, tmp_path, monkeypatch
+    ):
+        state_file = tmp_path / "state.json"
+        monkeypatch.setattr(usb_power, "_STATE_FILE", state_file)
+        usb_power._last_known_port = ("1-1", 3)
+
+        mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
+        usb_power.find_or_recall_printer_port()
+
+        # File should not exist — no write happened because value is unchanged
+        assert not state_file.exists()
+
+
 class TestLibusbCacheInvalidation:
     """power_on must invalidate the pyusb libusb cache so the next scan
     re-enumerates the device that just came back. power_off must NOT

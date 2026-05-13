@@ -8,11 +8,16 @@ support per-port power switching (ppps) — confirmed for the 2109:3431 USB
 2.0 hub on hector.
 """
 
+import json
+import logging
 import os
 import re
 import subprocess
+from pathlib import Path
 
 import usb.backend.libusb1
+
+logger = logging.getLogger(__name__)
 
 UHUBCTL_BIN = os.environ.get("UHUBCTL_BIN", "uhubctl")
 DYMO_USB_ID = "0922:1002"
@@ -120,12 +125,70 @@ def power_off(hub: str, port: int) -> None:
     # power/status`) rather than libusb-based device enumeration.
 
 
+# Path where `_last_known_port` is persisted across container restarts.
+# Default lives inside the Docker output mount, which is already a
+# persistent volume in the standard deployment — avoids requiring a
+# new volume mount just for this state. Tests pass an explicit path.
+_STATE_FILE = Path(
+    os.environ.get("LABELLE_STATE_FILE", "/app/output/.labelle/state.json")
+)
+
+
+def _load_state(path: Path | None = None) -> tuple[str, int] | None:
+    """Read a previously-saved (hub, port) from disk, or None if absent/invalid."""
+    if path is None:
+        path = _STATE_FILE
+    try:
+        data = json.loads(path.read_text())
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("Could not load printer port state from %s: %s", path, e)
+        return None
+    hub = data.get("hub")
+    port = data.get("port")
+    if isinstance(hub, str) and isinstance(port, int):
+        return hub, port
+    logger.warning(
+        "Ignoring printer port state from %s: unexpected shape %r", path, data
+    )
+    return None
+
+
+def _save_state(hub: str, port: int, path: Path | None = None) -> None:
+    """Persist (hub, port) so a container restart can recover the cache.
+
+    Best-effort: a write failure (read-only fs, missing volume mount,
+    permissions) only loses cross-restart memory, never breaks runtime.
+
+    Writes are atomic-on-POSIX: serialize to a sibling `.tmp` file
+    first, then `os.replace()` over the target. A process interrupted
+    mid-write (or another thread writing concurrently) leaves the
+    target either fully old or fully new, never a torn JSON that
+    `_load_state` would have to discard.
+    """
+    if path is None:
+        path = _STATE_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps({"hub": hub, "port": port}))
+        tmp.replace(path)
+    except OSError as e:
+        logger.warning("Could not save printer port state to %s: %s", path, e)
+
+
 # Module-global, intentionally unlocked. waitress serves requests on
 # multiple threads, but Python's GIL makes the single-assignment update
 # atomic and the worst-case race outcome is "valid value overwritten by
 # another valid value" — benign for a single-printer setup. Revisit if
 # we ever need per-printer caching for multiple devices.
-_last_known_port: tuple[str, int] | None = None
+#
+# Seeded from disk at module load so a container restart while the
+# printer is powered off doesn't lose the port — without that, the
+# /api/power/on endpoint would 404 until the device was re-attached
+# (or manually re-powered via shell uhubctl).
+_last_known_port: tuple[str, int] | None = _load_state()
 
 
 def find_or_recall_printer_port(
@@ -137,10 +200,14 @@ def find_or_recall_printer_port(
     the USB tree — `find_printer_port` would return None and we'd have no
     way to power it back on. This falls back to the cached result.
 
+    On a live discovery (cache miss or hit-with-new-value) we persist the
+    new value to disk, so a container restart picks up where we left off.
+
     Thread safety: best-effort, see `_last_known_port` comment above.
     """
     global _last_known_port
     found = find_printer_port(vendor_product_id)
-    if found:
+    if found and found != _last_known_port:
         _last_known_port = found
+        _save_state(*found)
     return found or _last_known_port
