@@ -14,6 +14,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+import power_save
 import usb_power
 from label_builder import preview_label
 from printer_service import list_printers, print_label
@@ -22,11 +23,45 @@ from printer_service import list_printers, print_label
 # time to re-enumerate on the USB bus.
 POWER_ON_SETTLE_SECONDS = 1.5
 
+# Routes that should NOT count as "activity" for the idle timer:
+# - /api/health: monitoring tools poll it constantly, would keep the
+#   printer awake forever
+# - /api/power/*: manual control endpoints, shouldn't feed back into
+#   the auto-idle logic
+_POWER_SAVE_IGNORED_PATHS = ("/api/health",)
+_POWER_SAVE_IGNORED_PREFIXES = ("/api/power/",)
+
+# Routes that need the printer to be powered on. The before_request
+# hook will block on a power-on for these if the saver has turned the
+# port off.
+_PRINTER_USING_PATHS = ("/api/print", "/api/preview", "/api/printers", "/api/upload-image")
+
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
 DIST_DIR = os.path.join(os.path.dirname(__file__), "dist-client")
 UPLOAD_DIR = tempfile.mkdtemp(prefix="labelle-uploads-")
+
+
+@app.before_request
+def _track_activity_and_wake_printer():
+    path = request.path
+    if path in _POWER_SAVE_IGNORED_PATHS:
+        return
+    if any(path.startswith(p) for p in _POWER_SAVE_IGNORED_PREFIXES):
+        return
+    power_save.record_activity()
+    if path in _PRINTER_USING_PATHS:
+        try:
+            power_save.ensure_powered()
+        except Exception:
+            # ensure_powered failures must not break the request — the
+            # downstream handler will fail loudly enough on its own if
+            # the printer really isn't there.
+            traceback.print_exc()
+
+
+power_save.start()
 
 
 @app.route("/api/print", methods=["POST"])

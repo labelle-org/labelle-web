@@ -3,6 +3,7 @@ import { TAPE_SIZES, LABEL_COLORS } from "../lib/constants";
 import { fetchPrinters } from "../lib/api";
 import type { TapeSize, Alignment, LabelColor } from "../types/label";
 import { useState } from "react";
+import { PowerToggle } from "./PowerToggle";
 
 export function SettingsBar() {
   const settings = useLabelStore((s) => s.settings);
@@ -31,6 +32,16 @@ export function SettingsBar() {
   // - Remember last selected printer per user
   // - Support printer-specific preset configurations
   const showPrinterSelector = availablePrinters.length > 1;
+
+  // Hide the USB power toggle when a virtual printer is selected —
+  // virtual printers don't have a USB port to power off. When
+  // Auto-select is active or a real USB printer is selected, the
+  // toggle stays visible (and itself hides if the server can't
+  // resolve a controllable port).
+  const selectedPrinter = settings.printerId
+    ? availablePrinters.find((p) => p.id === settings.printerId)
+    : null;
+  const selectedIsVirtual = selectedPrinter?.vendorProductId === "virtual";
 
   return (
     <details className="bg-white rounded-lg shadow">
@@ -65,6 +76,8 @@ export function SettingsBar() {
           </button>
         </>
       )}
+
+      {!selectedIsVirtual && <PowerToggle />}
 
       <Field label="Tape (mm)">
         <select

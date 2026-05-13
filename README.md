@@ -31,6 +31,7 @@ You can fight against AI usage or learn to embrace it as a new way of working. I
 - **Virtual printers** -- configure virtual printers that save labels as PNG images, JSON data, or both (great for testing, archiving, and development)
 - **Save/load labels** -- export label designs to JSON files and load them back, with embedded image data for portability
 - **Print via labelle** -- sends labels to the printer using the labelle Python library over USB
+- **USB power save** -- optionally power off the printer's USB port via uhubctl when the server is idle, and power it back on automatically when the page is opened (opt-in via `USB_POWER_SAVE=true`)
 
 ## Prerequisites
 
@@ -234,6 +235,18 @@ Upload an image for use in image widgets. Accepts `multipart/form-data` with a `
 **Response:** `{ "filename": "uuid.png" }`
 
 The returned filename is used in the `image` widget's `filename` field for subsequent print/preview requests.
+
+### `GET /api/power/status`, `POST /api/power/on`, `POST /api/power/off`
+
+Manual USB port power control for the Dymo printer via `uhubctl`. Available regardless of `USB_POWER_SAVE` — they're inert when not called. Requires a hub that supports per-port power switching (ppps) and `uhubctl` on PATH (already installed in the Docker image).
+
+**Response (all three):** `{ "hub": "1-1", "port": 3, "powered": true, "connected": true }` plus `status: "success"` on the POST variants. `404` if no printer can be located, `500` with a JSON `{status, message}` envelope if uhubctl fails or its output can't be parsed.
+
+## Power saving (auto idle)
+
+Set `USB_POWER_SAVE=true` to have the server power off the Dymo's USB port after `USB_POWER_SAVE_IDLE_MINUTES` (default 60) of no activity, and power it back on automatically when the page is opened. The transformer in DYMO USB labelers runs warm even when idle, so this saves a noticeable amount of electricity for printers that are only used occasionally.
+
+Activity is recorded by any API call except `/api/health` (so monitoring polls don't keep the printer awake) and `/api/power/*` (manual control doesn't feed back into the timer). The first `/api/printers`, `/api/preview`, `/api/print`, or `/api/upload-image` call after an auto power-off blocks ~1.5 s while the port is brought back up and the device re-enumerates on the USB bus.
 
 ## License
 

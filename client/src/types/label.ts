@@ -68,6 +68,13 @@ export interface PrinterInfo {
   serialNumber?: string;
 }
 
+export interface PowerStatus {
+  hub: string;
+  port: number;
+  powered: boolean;
+  connected: boolean;
+}
+
 export interface LabelSettings {
   tapeSizeMm: TapeSize;
   marginPx: number;

@@ -1,6 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+// PowerToggle (rendered inside SettingsBar) fires fetchPowerStatus on
+// mount. Stub it out so these tests stay focused on the settings UI
+// and don't make real HTTP calls.
+vi.mock("../lib/api", () => ({
+  fetchPrinters: vi.fn().mockResolvedValue([]),
+  fetchPowerStatus: vi.fn().mockResolvedValue({
+    hub: "1-1",
+    port: 3,
+    powered: true,
+    connected: true,
+  }),
+  powerOn: vi.fn(),
+  powerOff: vi.fn(),
+}));
+
 import { SettingsBar } from "./SettingsBar";
 import { useLabelStore } from "../state/useLabelStore";
 import type { PrinterInfo } from "../types/label";
@@ -104,5 +120,50 @@ describe("SettingsBar printer selector", () => {
     await userEvent.selectOptions(select, "");
 
     expect(useLabelStore.getState().settings.printerId).toBeUndefined();
+  });
+});
+
+describe("SettingsBar power toggle visibility", () => {
+  it("shows the power toggle when a real USB printer is selected", async () => {
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: "usb:1" },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    await waitFor(() => {
+      expect(screen.getByText("Printer power")).toBeInTheDocument();
+    });
+  });
+
+  it("shows the power toggle on Auto-select (no printerId)", async () => {
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: undefined },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    await waitFor(() => {
+      expect(screen.getByText("Printer power")).toBeInTheDocument();
+    });
+  });
+
+  it("hides the power toggle when a virtual printer is selected", async () => {
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: {
+        ...useLabelStore.getState().settings,
+        printerId: "virtual:Office",
+      },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    // Even after the api mock resolves, "Printer power" should never
+    // appear because PowerToggle isn't rendered at all.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Printer power")).not.toBeInTheDocument();
   });
 });

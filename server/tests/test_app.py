@@ -407,6 +407,69 @@ class TestApiPower:
         assert resp.get_json()["status"] == "error"
 
 
+class TestPowerSaveHook:
+    """The before_request hook should record activity for normal routes and
+    skip the noisy/feedback-loop ones (health, power-control)."""
+
+    @patch("app.power_save.record_activity")
+    def test_health_does_not_record_activity(self, mock_record, client):
+        client.get("/api/health")
+        mock_record.assert_not_called()
+
+    @patch("app.power_save.ensure_powered")
+    @patch("app.power_save.record_activity")
+    def test_power_status_does_not_record_activity(
+        self, mock_record, mock_ensure, client
+    ):
+        with patch("app.usb_power.find_or_recall_printer_port", return_value=None):
+            client.get("/api/power/status")
+        mock_record.assert_not_called()
+        mock_ensure.assert_not_called()
+
+    @patch("app.power_save.ensure_powered")
+    @patch("app.power_save.record_activity")
+    @patch("app.list_printers", return_value=[])
+    def test_printers_records_activity_and_wakes(
+        self, mock_list, mock_record, mock_ensure, client
+    ):
+        client.get("/api/printers")
+        mock_record.assert_called_once()
+        mock_ensure.assert_called_once()
+
+    @patch("app.power_save.ensure_powered")
+    @patch("app.power_save.record_activity")
+    @patch("app.preview_label")
+    def test_preview_records_activity_and_wakes(
+        self, mock_preview, mock_record, mock_ensure, client
+    ):
+        import io
+
+        img = Image.new("RGB", (10, 10), "white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        mock_preview.return_value = buf.getvalue()
+        client.post(
+            "/api/preview",
+            data=json.dumps(
+                {"widgets": [{"type": "text", "text": "x", "id": "1"}], "settings": {}}
+            ),
+            content_type="application/json",
+        )
+        mock_record.assert_called_once()
+        mock_ensure.assert_called_once()
+
+    @patch("app.power_save.ensure_powered")
+    @patch("app.power_save.record_activity")
+    @patch("app.list_printers", return_value=[])
+    def test_ensure_powered_failure_does_not_break_request(
+        self, mock_list, mock_record, mock_ensure, client
+    ):
+        mock_ensure.side_effect = RuntimeError("uhubctl exploded")
+        resp = client.get("/api/printers")
+        # The before_request hook swallowed the failure; the route still 200s.
+        assert resp.status_code == 200
+
+
 class TestApiPrintErrors:
     @patch("app.print_label")
     def test_returns_400_for_empty_widgets(self, mock_print, client):

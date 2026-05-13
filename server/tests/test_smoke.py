@@ -14,6 +14,7 @@ SERVER_MODULES = [
     "app",
     "config",
     "label_builder",
+    "power_save",
     "printer_service",
     "usb_power",
     "virtual_printer",

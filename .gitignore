@@ -19,6 +19,7 @@ __pycache__/
 # Environment
 .env
 .env.*
+!.env.example
 /.venv/
 labelle-main/
 
