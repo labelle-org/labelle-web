@@ -15,7 +15,10 @@ name: Build PR image
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches: [main]
+    # No `branches:` filter — stacked PRs (e.g. slice 2 targeting
+    # slice 1's branch instead of main) need a buildable image too,
+    # otherwise they can't be tested on hardware until the parent
+    # PR merges.
 
 # Cancel any in-flight build when a new commit is pushed to the same
 # PR. Avoids racing parallel multi-arch builds to the same `:pr-<N>`

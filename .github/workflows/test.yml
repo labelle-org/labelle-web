@@ -3,8 +3,10 @@ name: Tests
 on:
   push:
     branches: [main]
+  # Run on every PR regardless of base — stacked PRs (e.g. slice 2
+  # of a feature targeting slice 1's branch instead of main) need CI
+  # too, otherwise they ship blind.
   pull_request:
-    branches: [main]
 
 jobs:
   test:
