@@ -110,25 +110,23 @@ class TestFindOrRecall:
 
 
 class TestPowerOnOff:
-    def test_power_on_calls_uhubctl_with_a_on(self, mock_run):
+    def test_power_on_invokes_exact_command(self, mock_run):
         mock_run.return_value = _result("OK")
         usb_power.power_on("1-1", 3)
-        cmd = mock_run.call_args[0][0]
-        assert cmd[-5:] == ["-l", "1-1", "-p", "3", "-a"] or "on" in cmd
-        # And the action is "on"
-        assert "on" in cmd
-        assert "off" not in cmd
+        assert mock_run.call_args[0][0] == [
+            usb_power.UHUBCTL_BIN, "-l", "1-1", "-p", "3", "-a", "on"
+        ]
 
-    def test_power_off_calls_uhubctl_with_a_off(self, mock_run):
+    def test_power_off_invokes_exact_command(self, mock_run):
         mock_run.return_value = _result("OK")
         usb_power.power_off("1-1", 3)
-        cmd = mock_run.call_args[0][0]
-        assert "off" in cmd
-        assert "on" not in cmd
+        assert mock_run.call_args[0][0] == [
+            usb_power.UHUBCTL_BIN, "-l", "1-1", "-p", "3", "-a", "off"
+        ]
 
     def test_power_on_passes_hub_and_port(self, mock_run):
         mock_run.return_value = _result("OK")
         usb_power.power_on("2-3", 4)
-        cmd = mock_run.call_args[0][0]
-        assert "2-3" in cmd
-        assert "4" in cmd
+        assert mock_run.call_args[0][0] == [
+            usb_power.UHUBCTL_BIN, "-l", "2-3", "-p", "4", "-a", "on"
+        ]
