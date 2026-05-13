@@ -1,27 +1,51 @@
 name: Build PR image
 
 # Builds a Docker image for every PR push and publishes it to GHCR
-# under `:pr-<N>` and `:<sha>` tags so it can be pulled and tested on
-# hardware (e.g. hector) without rebuilding manually on the Pi. Does
+# under `:pr-<N>` and `:<short-sha>` tags so it can be pulled and tested
+# on hardware (e.g. hector) without rebuilding manually on the Pi. Does
 # NOT touch `:latest` or `:vX.Y.Z` — those remain owned by release.yml
-# and are only updated on merge to main with a version bump.
+# and only update on merge to main with a version bump.
+#
+# On PR close (merged or not), a cleanup job deletes the `:pr-<N>`
+# image so it doesn't linger in GHCR forever.
+#
+# Fork PRs are skipped — their GITHUB_TOKEN is read-only and can't
+# push to GHCR or delete packages.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
     branches: [main]
+
+# Cancel any in-flight build when a new commit is pushed to the same
+# PR. Avoids racing parallel multi-arch builds to the same `:pr-<N>`
+# tag (last-finished-wins, not last-pushed-wins).
+concurrency:
+  group: pr-image-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Validate the image actually starts and the API responds before
+  # publishing it — same reusable workflow that release.yml gates on.
+  smoke-test:
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/_docker-smoke-test.yml
+
   build-and-push:
+    needs: smoke-test
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      pull-requests: write
 
     steps:
       - name: Checkout PR head
@@ -41,16 +65,26 @@ jobs:
 
       - name: Compute short SHA
         id: sha
-        run: echo "short=$(echo ${{ github.event.pull_request.head.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: echo "short=${HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=pr-${{ github.event.pull_request.number }}
+            type=raw,value=${{ steps.sha.outputs.short }}
 
       - name: Build and push multi-platform
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.sha.outputs.short }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             GIT_SHA=${{ steps.sha.outputs.short }}
             GIT_BRANCH=pr-${{ github.event.pull_request.number }}
@@ -75,3 +109,35 @@ jobs:
           curl http://localhost:5001/api/health
           \`\`\`
           EOF
+
+  # Delete the `:pr-<N>` image versions when the PR closes (merged or
+  # not). Old SHA-only versions left behind by superseded builds aren't
+  # explicitly cleaned here — they become untagged and can be reaped by
+  # a GHCR retention policy if needed.
+  cleanup:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete PR image versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TAG: pr-${{ github.event.pull_request.number }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: ${{ github.event.repository.name }}
+        run: |
+          set -eu
+          VERSIONS=$(gh api \
+            "/users/$OWNER/packages/container/$PACKAGE/versions" --paginate \
+            --jq ".[] | select(.metadata.container.tags | index(\"$PR_TAG\")) | .id" || true)
+          if [ -z "$VERSIONS" ]; then
+            echo "No versions tagged $PR_TAG to delete"
+            exit 0
+          fi
+          for VERSION_ID in $VERSIONS; do
+            echo "Deleting version $VERSION_ID (tag $PR_TAG)"
+            gh api -X DELETE "/users/$OWNER/packages/container/$PACKAGE/versions/$VERSION_ID"
+          done
