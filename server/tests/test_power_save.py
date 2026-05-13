@@ -161,6 +161,35 @@ class TestCheckIdle:
         assert power_save.check_idle() is False
         mock_off.assert_not_called()
 
+    @patch("power_save.usb_power.power_off")
+    @patch("power_save.usb_power.find_or_recall_printer_port")
+    def test_re_check_under_lock_aborts_when_activity_fresh(
+        self, mock_find, mock_off, monkeypatch
+    ):
+        """If a request bumps `_last_activity` between the unlocked first
+        check and the lock acquisition, the re-check inside the critical
+        region must abort the power-off.
+
+        Simulated by patching `time.monotonic` to return two values: a
+        far-future one for the first (unlocked) check so idle is
+        exceeded, then a close-to-`_last_activity` one for the re-check
+        so it looks fresh again.
+        """
+        monkeypatch.setenv("USB_POWER_SAVE", "true")
+        monkeypatch.setenv("USB_POWER_SAVE_IDLE_MINUTES", "1")  # 60s threshold
+
+        base = 1000.0
+        power_save._last_activity = base
+        with patch(
+            "power_save.time.monotonic",
+            side_effect=[base + 1000, base + 30],
+        ):
+            assert power_save.check_idle() is False
+
+        mock_off.assert_not_called()
+        # The re-check aborts before we ever shell out to uhubctl.
+        mock_find.assert_not_called()
+
 
 class TestStart:
     def test_does_not_start_thread_when_disabled(self, monkeypatch):
