@@ -1,5 +1,7 @@
 import traceback
 
+from PIL import Image
+
 from labelle.lib.devices.device_manager import DeviceManager
 from labelle.lib.devices.dymo_labeler import DymoLabeler
 
@@ -133,4 +135,49 @@ def print_label(
         device=device,
     )
     bitmap = render_payload(widgets, settings, upload_dir)
+    dymo_labeler.print(bitmap)
+
+
+def print_bitmap(
+    bitmap: Image.Image, settings: dict, printer_id: str | None = None
+) -> None:
+    """Send a pre-rendered mode-"1" bitmap directly to the printer.
+
+    Used for the cut-mark strip where MarginsRenderEngine's labeler-margin
+    offset compensation would clip a narrow payload off-canvas. For virtual
+    printers, the bitmap is saved as-is via save_preview (inverted to the
+    intuitive black-on-white form first).
+    """
+    # Virtual printer
+    if printer_id and printer_id.startswith("virtual:"):
+        virtual_printer = _find_virtual_printer(printer_id)
+        # Bitmap is mode "1" with 1=ink. Convert to a viewable PNG where
+        # ink shows as black on white tape.
+        viewable = bitmap.point(lambda v: 0 if v else 255, mode="L").convert("1")
+        virtual_printer.save_preview(viewable)
+        return
+
+    # Real USB printer
+    try:
+        device_manager = DeviceManager()
+        device_manager.scan()
+        if printer_id:
+            matching = [d for d in device_manager.devices if d.usb_id == printer_id]
+            if not matching:
+                raise ValueError(f"Printer not found: {printer_id}")
+            device = matching[0]
+        else:
+            device = device_manager.find_and_select_device()
+    except Exception:
+        if printer_id:
+            raise
+        # No USB printer available — silently skip the cut mark rather
+        # than crashing the surrounding batch.
+        return
+
+    device.setup()
+    dymo_labeler = DymoLabeler(
+        tape_size_mm=settings.get("tapeSizeMm", 12),
+        device=device,
+    )
     dymo_labeler.print(bitmap)

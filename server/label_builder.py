@@ -32,26 +32,45 @@ def mm_to_payload_px(mm: float, margin: float) -> float:
 
 
 # Cut-mark pattern. CUT_MARK_ON pixels on, CUT_MARK_OFF off, repeated for the
-# tape's full height. A column of dotted pixels printed on the right edge of
-# each label so the user can tear/cut between batch-printed labels.
+# tape's full height. A column of dotted pixels printed on its own short tape
+# strip between batch-printed labels so the user can tear/cut between them.
 CUT_MARK_ON = 1
 CUT_MARK_OFF = 2
+CUT_MARK_WIDTH_PX = 1
 
 
-class CutMarkRenderEngine(RenderEngine):
-    """A 1-pixel-wide column of dotted pixels for tear/cut guidance."""
+def paint_cut_mark_in_trailing_margin(bitmap: Image.Image, margin_px: int) -> None:
+    """Paint a dotted column INTO an already-rendered label bitmap, in the
+    middle of its trailing-margin zone. Mutates the bitmap in place.
 
-    def render(self, context: RenderContext) -> Image.Image:
-        height = context.height_px
-        # Mode "1": 0 = ink (printed), 1 = no ink. Start fully unprinted.
-        img = Image.new("1", (1, height), 1)
-        pixels = img.load()
-        step = CUT_MARK_ON + CUT_MARK_OFF
-        for y in range(0, height, step):
-            for dy in range(CUT_MARK_ON):
-                if y + dy < height:
-                    pixels[0, y + dy] = 0
-        return img
+    Why this design: each labelle label bitmap is built as
+    `[content][~14 mm trailing margin]` (visible margin + labeler-margin
+    compensation). The next label in a batch has no leading blank
+    (paste offset clips its first column). So adding a separate
+    cut-mark print between labels lands the dots flush against the
+    next label's content edge — visually flush, not centered.
+
+    Painting INTO the trailing zone puts the dotted column inside the
+    14 mm that's already there, no extra tape consumed, and the
+    dot sits in the middle of the visible inter-label gap.
+
+    Position: width - margin_px, which is roughly the centre of the
+    right trailing-margin zone for a typical centre-justified label.
+
+    Labelle payload convention: mode "1" with 1 = ink, 0 = no ink.
+    """
+    width, height = bitmap.size
+    x = max(0, width - margin_px)
+    if x >= width:
+        return
+    pixels = bitmap.load()
+    step = CUT_MARK_ON + CUT_MARK_OFF
+    for y in range(0, height, step):
+        for dy in range(CUT_MARK_ON):
+            if y + dy < height:
+                for ox in range(CUT_MARK_WIDTH_PX):
+                    if x + ox < width:
+                        pixels[x + ox, y + dy] = 1
 
 
 def _build_render_engines(
@@ -112,9 +131,6 @@ def _build_render_engines(
                 picture_path = os.path.join(upload_dir, filename)
                 if os.path.isfile(picture_path):
                     engines.append(PictureRenderEngine(picture_path=picture_path))
-
-        elif widget_type == "cutMark":
-            engines.append(CutMarkRenderEngine())
 
     return engines
 

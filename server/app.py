@@ -19,8 +19,8 @@ from werkzeug.utils import secure_filename
 
 import power_save
 import usb_power
-from label_builder import preview_label
-from printer_service import list_printers, print_label
+from label_builder import paint_cut_mark_in_trailing_margin, preview_label, render_payload
+from printer_service import list_printers, print_bitmap, print_label
 
 # Seconds to wait after power-on before reading status, so the device has
 # time to re-enumerate on the USB bus.
@@ -91,22 +91,20 @@ def _track_activity_and_wake_printer():
 power_save.start()
 
 
-def _print_cut_mark(settings: dict, printer_id: str | None) -> None:
-    """Print a dotted cut-mark strip as a separate label.
+def _print_label_with_cut_mark(
+    widgets: list, settings: dict, printer_id: str | None
+) -> None:
+    """Print a label with a cut mark painted into its trailing margin.
 
-    Issued between successive labels in a batch so the dots sit outside
-    each label's margins (the leader/trailer margins of the cut-mark
-    strip and the adjacent labels form the natural cut zone). marginPx
-    and minLengthMm are zeroed so the strip is just the dotted column
-    plus the printer's unavoidable physical margins.
+    Renders the label normally then injects the dotted column into the
+    already-allocated trailing blank — no extra tape consumed, dot
+    sits in the middle of what would otherwise be the inter-label gap.
     """
-    cut_settings = {**settings, "marginPx": 0, "minLengthMm": 0}
-    print_label(
-        [{"type": "cutMark"}],
-        cut_settings,
-        upload_dir=UPLOAD_DIR,
-        printer_id=printer_id,
+    bitmap = render_payload(widgets, settings, upload_dir=UPLOAD_DIR)
+    paint_cut_mark_in_trailing_margin(
+        bitmap, margin_px=settings.get("marginPx", 56)
     )
+    print_bitmap(bitmap, settings, printer_id=printer_id)
 
 
 @app.route("/api/print", methods=["POST"])
@@ -414,14 +412,16 @@ def api_batch_print():
                 power_save.record_activity()
 
                 try:
-                    # Cut mark between successive labels (not before the
-                    # first, not after the last) — sits in its own tape
-                    # strip so the labeler margins of each side form the
-                    # natural cut zone.
-                    if idx > 0 and settings.get("cutMark"):
-                        _print_cut_mark(settings, printer_id)
                     substituted = _substitute_widgets(widgets, row_values)
-                    print_label(substituted, settings, upload_dir=UPLOAD_DIR, printer_id=printer_id)
+                    # Paint the cut mark into the trailing margin of every
+                    # label except the last — that gap is already there
+                    # (labelle builds ~14 mm of trailing blank into each
+                    # label's bitmap), so the dot lands in its centre with
+                    # zero extra tape.
+                    if idx < total - 1 and settings.get("cutMark"):
+                        _print_label_with_cut_mark(substituted, settings, printer_id)
+                    else:
+                        print_label(substituted, settings, upload_dir=UPLOAD_DIR, printer_id=printer_id)
                 except Exception as e:
                     traceback.print_exc()
                     yield f"data: {json.dumps({'event': 'error', 'index': idx, 'message': str(e)})}\n\n"
