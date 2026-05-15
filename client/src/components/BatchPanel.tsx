@@ -199,9 +199,15 @@ export function BatchPanel() {
                               }
                               title={
                                 isPreviewed
-                                  ? "Stop previewing this row"
-                                  : "Preview this row"
+                                  ? `Stop previewing row ${rowIdx + 1}`
+                                  : `Preview row ${rowIdx + 1}`
                               }
+                              aria-label={
+                                isPreviewed
+                                  ? `Stop previewing row ${rowIdx + 1}`
+                                  : `Preview row ${rowIdx + 1}`
+                              }
+                              aria-pressed={isPreviewed}
                               onClick={() =>
                                 updateBatch({
                                   selectedRowIndex: isPreviewed ? null : rowIdx,
@@ -213,10 +219,11 @@ export function BatchPanel() {
                             {batch.rows.length > 1 ? (
                               <button
                                 className="text-red-400 hover:text-red-600"
-                                title="Remove row"
+                                title={`Remove row ${rowIdx + 1}`}
+                                aria-label={`Remove row ${rowIdx + 1}`}
                                 onClick={() => removeBatchRow(rowIdx)}
                               >
-                                x
+                                <span aria-hidden="true">x</span>
                               </button>
                             ) : (
                               <span className="w-3" />
