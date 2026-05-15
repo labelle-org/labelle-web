@@ -30,6 +30,7 @@ You can fight against AI usage or learn to embrace it as a new way of working. I
 - **Multi-printer support** -- automatically detects all connected DYMO printers; select specific printer when multiple are available
 - **Virtual printers** -- configure virtual printers that save labels as PNG images, JSON data, or both (great for testing, archiving, and development)
 - **Batch print** -- print multiple labels with variable content using `:varname:` placeholders, with a table to fill in values per row, configurable copies and pause time, SSE progress streaming, and cancellation support
+- **Cut mark** -- optional dotted column painted into the trailing margin between batch labels so you can tear/cut between them; uses the existing inter-label gap, no extra tape
 - **Save/load labels** -- export label designs to JSON files and load them back, with embedded image data and batch configuration for portability
 - **Print via labelle** -- sends labels to the printer using the labelle Python library over USB
 - **USB power save** -- optionally power off the printer's USB port via uhubctl when the server is idle, and power it back on automatically when the page is opened (opt-in via `USB_POWER_SAVE=true`)

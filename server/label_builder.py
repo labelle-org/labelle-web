@@ -61,8 +61,11 @@ def paint_cut_mark_in_trailing_margin(bitmap: Image.Image, margin_px: int) -> No
     Labelle payload convention: mode "1" with 1 = ink, 0 = no ink.
     """
     width, height = bitmap.size
-    x = max(0, width - margin_px)
-    if x >= width:
+    x = width - margin_px
+    # If the bitmap is narrower than the margin (degenerate input), there is
+    # no trailing-margin zone to paint into — skip rather than landing the
+    # dots in the content area.
+    if x < 0 or x >= width:
         return
     pixels = bitmap.load()
     step = CUT_MARK_ON + CUT_MARK_OFF
