@@ -300,14 +300,15 @@ def api_batch_print():
             ),
         ), 400
 
-    # Only one batch job at a time. Completed jobs are popped in `finally`
-    # below, so a non-empty dict means a job is in flight.
+    # Fast 409 if a job is already running. The actual slot acquisition is
+    # deferred to the start of the generator below so the entry's lifetime
+    # is tied to iteration — if the client aborts before reading any of the
+    # response body, the slot is never inserted and we don't leak it.
     with _batch_lock:
         if _batch_jobs:
             return jsonify(status="error", message="Another batch job is already running"), 409
 
-        job_id = uuid.uuid4().hex
-        _batch_jobs[job_id] = {"cancelled": False}
+    job_id = uuid.uuid4().hex
 
     # Build print list: each row × copies
     print_list = []
@@ -316,6 +317,16 @@ def api_batch_print():
             print_list.append(row)
 
     def generate():
+        # Acquire the slot at the start of iteration. Closes a tiny race
+        # window where two near-simultaneous requests both pass the route
+        # check above; the loser surfaces the same message as an SSE error
+        # event so the client's existing error handling fires.
+        with _batch_lock:
+            if _batch_jobs:
+                yield f"data: {json.dumps({'event': 'error', 'message': 'Another batch job is already running'})}\n\n"
+                return
+            _batch_jobs[job_id] = {"cancelled": False}
+
         try:
             yield f"data: {json.dumps({'event': 'started', 'jobId': job_id, 'total': total})}\n\n"
 
