@@ -61,6 +61,10 @@ MAX_BATCH_COPIES = 999
 MAX_BATCH_ROWS = 1000
 MAX_BATCH_TOTAL = 10000
 MAX_BATCH_PAUSE_SECONDS = 60.0
+# Cap on total pause time (total labels × pause). Individual caps don't bound
+# the product — 10000 × 60s would be ~7 days holding the print slot — so the
+# combined wall-clock budget caps that out at 8h.
+MAX_BATCH_DURATION_SECONDS = 8 * 3600
 
 
 @app.before_request
@@ -275,6 +279,17 @@ def api_batch_print():
         return jsonify(
             status="error",
             message=f"Batch too large: {total} labels (max {MAX_BATCH_TOTAL})",
+        ), 400
+
+    pause_budget = total * pause_time
+    if pause_budget > MAX_BATCH_DURATION_SECONDS:
+        return jsonify(
+            status="error",
+            message=(
+                f"Batch pause budget too long: {pause_budget:.0f}s "
+                f"(max {MAX_BATCH_DURATION_SECONDS}s = "
+                f"{MAX_BATCH_DURATION_SECONDS // 3600}h)"
+            ),
         ), 400
 
     # Only one batch job at a time

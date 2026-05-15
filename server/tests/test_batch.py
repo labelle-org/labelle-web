@@ -129,6 +129,23 @@ class TestBatchPrintValidation:
         assert resp.status_code == 400
         assert "Row 1" in resp.json["message"]
 
+    def test_pause_budget_too_long_returns_400(self, client):
+        # 1000 rows × 1 copy × 60s pause = 60000s ≈ 16.7h, over the 8h cap.
+        rows = [{"name": str(i)} for i in range(1000)]
+        resp = client.post(
+            "/api/batch-print",
+            data=json.dumps({
+                "widgets": [_widget()],
+                "settings": _settings(),
+                "rows": rows,
+                "copies": 1,
+                "pauseTime": 60,
+            }),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert "pause budget" in resp.json["message"]
+
     @patch("app.print_label")
     def test_non_string_value_is_coerced(self, mock_print, client):
         # Non-string values shouldn't crash the SSE stream — they get coerced
