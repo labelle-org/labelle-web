@@ -252,13 +252,18 @@ Print multiple labels with variable substitution. Uses Server-Sent Events (SSE) 
     { "name": "Bob", "id": "002" }
   ],
   "copies": 2,
-  "pauseTime": 1.0
+  "pauseTime": 1.0,
+  "jobId": "optional-client-generated-id"
 }
 ```
 
-Widget text/content fields use `:varname:` placeholders (e.g. `Hello :name:`) which are substituted per row.
+Widget text/content fields use `:varname:` placeholders (e.g. `Hello :name:`) which are substituted per row. Row values must be strings or numbers — `null`, booleans, arrays, and objects are rejected with a 400.
 
-**SSE events:** `started` (with jobId, total), `printing`, `printed`, `done`, `cancelled`, `error`
+`jobId` is optional (8-64 chars of `[a-zA-Z0-9_-]`); the server generates one if omitted. Either way it's echoed back in the `started` event. Supplying it client-side lets you cancel immediately after the POST returns without waiting for `started`.
+
+**Caps (all return 400 if exceeded):** `copies` ≤ 999, `pauseTime` ≤ 60 s, `rows` ≤ 1000, total labels (`rows × copies`) ≤ 10000, and total pause budget (`total × pauseTime`) ≤ 8 hours.
+
+**SSE events:** `started` (with `jobId`, `total`), `printing`, `printed`, `done`, `cancelled`, `error`. The response sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` so events stream through reverse proxies in real time.
 
 Returns HTTP 409 if another batch job is already running.
 
@@ -266,7 +271,9 @@ Returns HTTP 409 if another batch job is already running.
 
 Cancel a running batch print job. The server finishes the current label then stops.
 
-**Request body:** `{ "jobId": "..." }`
+**Request body:** `{ "jobId": "..." }` (required)
+
+**Responses:** 200 `{ status: "ok" }` on success, 400 if `jobId` is missing/empty, 404 if no job with that id is in flight.
 
 ### `GET /api/power/status`, `POST /api/power/on`, `POST /api/power/off`
 
