@@ -310,15 +310,21 @@ def api_batch_print():
             ),
         ), 400
 
-    # Fast 409 if a job is already running. The actual slot acquisition is
-    # deferred to the start of the generator below so the entry's lifetime
-    # is tied to iteration — if the client aborts before reading any of the
-    # response body, the slot is never inserted and we don't leak it.
+    # Reserve the slot atomically here so concurrent requests get a
+    # consistent HTTP 409 + JSON error (instead of one client racing past
+    # the check and finding out via an SSE error frame later). Cleanup is
+    # registered on the Response via call_on_close so the slot is released
+    # even if the generator never iterates (e.g. client aborts before
+    # reading the body).
+    job_id = uuid.uuid4().hex
     with _batch_lock:
         if _batch_jobs:
             return jsonify(status="error", message="Another batch job is already running"), 409
+        _batch_jobs[job_id] = {"cancelled": False}
 
-    job_id = uuid.uuid4().hex
+    def _release_slot():
+        with _batch_lock:
+            _batch_jobs.pop(job_id, None)
 
     # Build print list: each row × copies
     print_list = []
@@ -327,16 +333,6 @@ def api_batch_print():
             print_list.append(row)
 
     def generate():
-        # Acquire the slot at the start of iteration. Closes a tiny race
-        # window where two near-simultaneous requests both pass the route
-        # check above; the loser surfaces the same message as an SSE error
-        # event so the client's existing error handling fires.
-        with _batch_lock:
-            if _batch_jobs:
-                yield f"data: {json.dumps({'event': 'error', 'message': 'Another batch job is already running'})}\n\n"
-                return
-            _batch_jobs[job_id] = {"cancelled": False}
-
         try:
             yield f"data: {json.dumps({'event': 'started', 'jobId': job_id, 'total': total})}\n\n"
 
@@ -384,15 +380,17 @@ def api_batch_print():
 
             yield f"data: {json.dumps({'event': 'done', 'total': total})}\n\n"
         finally:
-            # Drop the entry entirely so _batch_jobs doesn't grow unbounded.
-            with _batch_lock:
-                _batch_jobs.pop(job_id, None)
+            _release_slot()
 
     response = Response(generate(), mimetype="text/event-stream")
     # Disable proxy/server buffering so progress events stream to the client
     # in real time instead of arriving in one chunk at the end.
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
+    # Defence-in-depth cleanup: if the WSGI layer closes the response before
+    # generate() ever iterates (e.g. client aborts pre-iteration), this fires
+    # and releases the slot. Both paths are idempotent via pop(default=None).
+    response.call_on_close(_release_slot)
     return response
 
 
