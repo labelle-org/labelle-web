@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLabelStore } from "../state/useLabelStore";
 import { printLabel, batchPrint, cancelBatchPrint } from "../lib/api";
 import type { BatchEvent } from "../lib/api";
@@ -12,6 +12,13 @@ export function PrintButton() {
     message?: string;
   }>({ type: "idle" });
   const jobIdRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // On unmount, abort any in-flight batch stream so onProgress doesn't fire
+  // setStatus on a torn-down component.
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   const totalLabels = batch.enabled
     ? batch.rows.length * batch.copies
@@ -27,6 +34,8 @@ export function PrintButton() {
 
     try {
       if (batch.enabled) {
+        const controller = new AbortController();
+        abortRef.current = controller;
         await batchPrint(
           widgets,
           settings,
@@ -37,6 +46,10 @@ export function PrintButton() {
             switch (event.event) {
               case "started":
                 jobIdRef.current = event.jobId ?? null;
+                setStatus({
+                  type: "loading",
+                  message: `Starting batch of ${event.total}...`,
+                });
                 break;
               case "printing":
                 setStatus({
@@ -64,6 +77,7 @@ export function PrintButton() {
                 break;
             }
           },
+          controller.signal,
         );
       } else {
         const result = await printLabel(widgets, settings);
@@ -74,12 +88,15 @@ export function PrintButton() {
         }
       }
     } catch (err) {
+      // AbortError on unmount: don't surface, the component is gone anyway.
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setStatus({
         type: "error",
         message: err instanceof Error ? err.message : "Network error",
       });
     } finally {
       jobIdRef.current = null;
+      abortRef.current = null;
     }
 
     setTimeout(() => {
