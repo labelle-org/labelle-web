@@ -1,13 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useLabelStore } from "../state/useLabelStore";
 import { printLabel, batchPrint, cancelBatchPrint } from "../lib/api";
 import type { BatchEvent } from "../lib/api";
+import { detectVariables } from "../lib/variables";
 
 export function PrintButton() {
   const widgets = useLabelStore((s) => s.widgets);
   const settings = useLabelStore((s) => s.settings);
   const batch = useLabelStore((s) => s.batch);
+  const hasVariables = useMemo(
+    () => detectVariables(widgets).length > 0,
+    [widgets],
+  );
   const [status, setStatus] = useState<{
     type: "idle" | "loading" | "success" | "error";
     message?: string;
@@ -30,7 +35,7 @@ export function PrintButton() {
     };
   }, []);
 
-  const totalLabels = batch.enabled
+  const totalLabels = hasVariables
     ? batch.rows.length * batch.copies
     : 1;
 
@@ -43,7 +48,7 @@ export function PrintButton() {
     setStatus({ type: "loading" });
 
     try {
-      if (batch.enabled) {
+      if (hasVariables) {
         const controller = new AbortController();
         abortRef.current = controller;
         // Generate the jobId client-side so the unmount cleanup can cancel
@@ -136,16 +141,16 @@ export function PrintButton() {
           onClick={handlePrint}
           disabled={
             status.type === "loading" ||
-            (batch.enabled && totalLabels === 0)
+            (hasVariables && totalLabels === 0)
           }
         >
           {status.type === "loading"
             ? status.message ?? "Printing..."
-            : batch.enabled
+            : hasVariables
               ? `Batch Print (${totalLabels} labels)`
               : "Print Label"}
         </button>
-        {status.type === "loading" && batch.enabled && (
+        {status.type === "loading" && hasVariables && (
           <button
             className="bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
             onClick={handleCancel}

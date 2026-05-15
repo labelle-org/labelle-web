@@ -12,12 +12,12 @@ export function LabelPreview() {
   const prevUrlRef = useRef<string | null>(null);
 
   const previewWidgets = useMemo(() => {
-    if (batch.enabled && batch.selectedRowIndex !== null) {
+    if (batch.selectedRowIndex !== null) {
       const row = batch.rows[batch.selectedRowIndex];
       if (row) return substituteWidgets(widgets, row.values);
     }
     return widgets;
-  }, [widgets, batch.enabled, batch.selectedRowIndex, batch.rows]);
+  }, [widgets, batch.selectedRowIndex, batch.rows]);
 
   useEffect(() => {
     const hasContent = previewWidgets.some((w) => {

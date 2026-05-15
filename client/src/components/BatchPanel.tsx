@@ -37,16 +37,15 @@ export function BatchPanel() {
   const updateWidget = useLabelStore((s) => s.updateWidget);
 
   const variables = useMemo(() => detectVariables(widgets), [widgets]);
+  const hasVariables = variables.length > 0;
 
-  // <details> open state is decoupled from batch.enabled — opening the
-  // panel to view its contents should not flip the Print button to batch
-  // mode. We do auto-open when batch.enabled goes true (initial mount, or
-  // a label file load that turns batch on), but the user can collapse it
-  // afterwards without disabling batch mode.
-  const [open, setOpen] = useState(batch.enabled);
+  // <details> auto-opens when variables appear (initial mount or a later
+  // edit / file load), and stays open while they exist. The user can still
+  // collapse it manually for a quick view of the rest of the editor.
+  const [open, setOpen] = useState(hasVariables);
   useEffect(() => {
-    if (batch.enabled) setOpen(true);
-  }, [batch.enabled]);
+    if (hasVariables) setOpen(true);
+  }, [hasVariables]);
 
   // Local string state for number inputs so the user can clear and retype
   // without the value snapping back to a clamped minimum mid-edit.
@@ -99,15 +98,6 @@ export function BatchPanel() {
         Batch Print
       </summary>
       <div className="p-3 pt-0 space-y-3 text-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={batch.enabled}
-            onChange={(e) => updateBatch({ enabled: e.target.checked })}
-          />
-          <span className="text-gray-700">Enable batch printing</span>
-        </label>
-
         {variables.length === 0 ? (
           <div className="space-y-2">
             <p className="text-gray-400 text-xs">

@@ -19,7 +19,6 @@ function newBatchRow(values: Record<string, string> = {}) {
 
 function defaultBatch(): BatchState {
   return {
-    enabled: false,
     copies: 1,
     pauseTime: 0,
     rows: [newBatchRow()],

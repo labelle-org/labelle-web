@@ -185,7 +185,6 @@ describe("Variable rename in batch rows", () => {
     const id = seedTextWidgetWith("Hi :name:");
     useLabelStore.setState({
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice" }, { name: "Bob" }]),
@@ -203,7 +202,6 @@ describe("Variable rename in batch rows", () => {
     const id = seedTextWidgetWith(":name:");
     useLabelStore.setState({
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice" }]),
@@ -220,7 +218,6 @@ describe("Variable rename in batch rows", () => {
     const id = seedTextWidgetWith(":name:");
     useLabelStore.setState({
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice" }]),
@@ -237,7 +234,6 @@ describe("Variable rename in batch rows", () => {
     const id = seedTextWidgetWith(":name: :age:");
     useLabelStore.setState({
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice", age: "30" }]),
@@ -255,7 +251,6 @@ describe("Variable rename in batch rows", () => {
     const id = seedTextWidgetWith(":name:");
     useLabelStore.setState({
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice" }]),
@@ -284,7 +279,6 @@ describe("Variable rename in batch rows", () => {
         { id: "w3", type: "barcode", content: ":name:", barcodeType: "code128", showText: false },
       ],
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice" }]),
@@ -328,7 +322,6 @@ describe("Variable rename in batch rows", () => {
         },
       ],
       batch: {
-        enabled: true,
         copies: 1,
         pauseTime: 0,
         rows: seedRows([{ name: "Alice", age: "30" }]),

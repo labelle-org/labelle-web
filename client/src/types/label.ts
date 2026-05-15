@@ -82,8 +82,10 @@ export interface BatchRow {
   values: Record<string, string>;
 }
 
+// Batch mode is active when the widgets contain :variable: placeholders;
+// there is no explicit on/off flag. `rows` holds the per-label values that
+// only get exercised once variables exist.
 export interface BatchState {
-  enabled: boolean;
   copies: number;
   pauseTime: number;
   rows: BatchRow[];

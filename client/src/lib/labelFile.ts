@@ -7,7 +7,6 @@ import { MAX_BATCH_COPIES, MAX_BATCH_PAUSE_SECONDS } from "./constants";
 // defaults, and `??` fallbacks at the use site only fire on
 // undefined — required types would lie about the runtime contract.
 interface LabelFileBatch {
-  enabled?: boolean;
   copies?: number;
   pauseTime?: number;
   rows?: Record<string, string>[];
@@ -30,7 +29,6 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function _hasBatchData(batch: BatchState): boolean {
-  if (batch.enabled) return true;
   if (batch.copies !== 1) return true;
   if (batch.pauseTime !== 0) return true;
   if (batch.rows.length > 1) return true;
@@ -72,14 +70,12 @@ export async function exportLabel(
 
   const data: LabelFile = { version: 2, settings, widgets: exportWidgets };
 
-  // Export batch whenever the user has touched anything in the panel
-  // (rows with values, non-default copies/pause, or just the enabled
-  // flag itself). The `enabled` flag is persisted explicitly so the
-  // on/off state round-trips faithfully — previously unchecking
-  // "Enable batch printing" before saving silently dropped row data.
+  // Export the batch block whenever the user has touched anything in the
+  // panel (rows with values, or non-default copies/pause). Batch mode is
+  // derived from variable presence at runtime, so there's no on/off flag
+  // to persist.
   if (batch && _hasBatchData(batch)) {
     data.batch = {
-      enabled: batch.enabled,
       copies: batch.copies,
       pauseTime: batch.pauseTime,
       // Strip the internal `id` — it's a runtime React-key concern only.
@@ -139,10 +135,7 @@ export async function importLabel(
     ) {
       throw new Error("Invalid label file: batch must be an object");
     }
-    const { enabled, copies, pauseTime, rows } = data.batch;
-    if (enabled !== undefined && typeof enabled !== "boolean") {
-      throw new Error("Invalid label file: batch.enabled must be a boolean");
-    }
+    const { copies, pauseTime, rows } = data.batch;
     if (
       copies !== undefined &&
       (typeof copies !== "number" || copies < 1 || copies > MAX_BATCH_COPIES)
@@ -182,10 +175,6 @@ export async function importLabel(
       values,
     }));
     batch = {
-      // Pre-enabled-flag files (v2 before this change) get enabled=true
-      // for backward compat — only files exported by the new code will
-      // explicitly persist false.
-      enabled: enabled ?? true,
       copies: copies ?? 1,
       pauseTime: pauseTime ?? 0,
       rows: importedRows,
