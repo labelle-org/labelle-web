@@ -189,6 +189,11 @@ export const useLabelStore = create<LabelStore>((set) => ({
           return w;
         });
 
+        // Migrate row keys. If `newName` already existed in the row
+        // (e.g. user renamed `:name:` -> `:full_name:` while another
+        // widget already used `:full_name:`), the rename takes
+        // precedence and the prior value is overwritten — the user's
+        // most recent edit wins.
         const rows: Record<string, string>[] = s.batch.rows.map((row) => {
           if (!(oldName in row)) return row;
           const value = row[oldName] ?? "";
