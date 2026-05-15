@@ -59,7 +59,7 @@ _batch_lock = threading.Lock()
 MAX_BATCH_COPIES = 999
 MAX_BATCH_ROWS = 1000
 MAX_BATCH_TOTAL = 10000
-MAX_BATCH_PAUSE_SECONDS = 60.0
+MAX_BATCH_PAUSE_SECONDS = 60
 # Cap on total pause time (total labels × pause). Individual caps don't bound
 # the product — 10000 × 60s would be ~7 days holding the print slot — so the
 # combined wall-clock budget caps that out at 8h.
@@ -279,7 +279,7 @@ def api_batch_print():
     if pause_time < 0 or pause_time > MAX_BATCH_PAUSE_SECONDS:
         return jsonify(
             status="error",
-            message=f"pauseTime must be between 0 and {MAX_BATCH_PAUSE_SECONDS:g} seconds",
+            message=f"pauseTime must be between 0 and {MAX_BATCH_PAUSE_SECONDS} seconds",
         ), 400
 
     # Validate row shape up front so failures surface as clean 400s rather
