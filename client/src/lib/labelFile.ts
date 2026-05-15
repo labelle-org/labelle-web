@@ -110,12 +110,41 @@ export async function importLabel(
   }
 
   let batch: BatchState | undefined;
-  if (data.batch) {
+  if (data.batch !== undefined) {
+    if (typeof data.batch !== "object" || data.batch === null) {
+      throw new Error("Invalid label file: batch must be an object");
+    }
+    const { copies, pauseTime, rows } = data.batch;
+    if (copies !== undefined && (typeof copies !== "number" || copies < 1)) {
+      throw new Error("Invalid label file: batch.copies must be a number >= 1");
+    }
+    if (
+      pauseTime !== undefined &&
+      (typeof pauseTime !== "number" || pauseTime < 0)
+    ) {
+      throw new Error("Invalid label file: batch.pauseTime must be a number >= 0");
+    }
+    if (rows !== undefined && !Array.isArray(rows)) {
+      throw new Error("Invalid label file: batch.rows must be an array");
+    }
+    if (rows) {
+      for (const row of rows) {
+        if (typeof row !== "object" || row === null || Array.isArray(row)) {
+          throw new Error("Invalid label file: batch.rows entries must be objects");
+        }
+        for (const v of Object.values(row)) {
+          if (typeof v !== "string") {
+            throw new Error("Invalid label file: batch.rows values must be strings");
+          }
+        }
+      }
+    }
+
     batch = {
       enabled: true,
-      copies: data.batch.copies ?? 1,
-      pauseTime: data.batch.pauseTime ?? 0,
-      rows: data.batch.rows?.length ? data.batch.rows : [{}],
+      copies: copies ?? 1,
+      pauseTime: pauseTime ?? 0,
+      rows: rows?.length ? rows : [{}],
       selectedRowIndex: null,
     };
   }
