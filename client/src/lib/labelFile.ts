@@ -111,7 +111,11 @@ export async function importLabel(
 
   let batch: BatchState | undefined;
   if (data.batch !== undefined) {
-    if (typeof data.batch !== "object" || data.batch === null) {
+    if (
+      typeof data.batch !== "object" ||
+      data.batch === null ||
+      Array.isArray(data.batch)
+    ) {
       throw new Error("Invalid label file: batch must be an object");
     }
     const { copies, pauseTime, rows } = data.batch;
