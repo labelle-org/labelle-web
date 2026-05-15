@@ -83,6 +83,34 @@ class TestBatchPrintValidation:
         assert resp.status_code == 400
         assert "numeric" in resp.json["message"]
 
+    def test_copies_above_max_returns_400(self, client):
+        resp = client.post(
+            "/api/batch-print",
+            data=json.dumps({
+                "widgets": [_widget()],
+                "settings": _settings(),
+                "rows": [{"name": "A"}],
+                "copies": 9999,
+            }),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert "copies" in resp.json["message"]
+
+    def test_pause_above_max_returns_400(self, client):
+        resp = client.post(
+            "/api/batch-print",
+            data=json.dumps({
+                "widgets": [_widget()],
+                "settings": _settings(),
+                "rows": [{"name": "A"}],
+                "pauseTime": 600,
+            }),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert "pauseTime" in resp.json["message"]
+
     def test_too_many_rows_returns_400(self, client):
         from app import MAX_BATCH_ROWS
 
@@ -281,7 +309,7 @@ class TestBatchPrintConcurrency:
         # Seed a fake in-flight job in the tracker.
         from app import _batch_jobs
 
-        _batch_jobs["fake"] = {"cancelled": False, "done": False}
+        _batch_jobs["fake"] = {"cancelled": False}
 
         resp = client.post(
             "/api/batch-print",
@@ -309,7 +337,7 @@ class TestBatchCancel:
     def test_cancel_sets_flag_on_running_job(self, client):
         from app import _batch_jobs
 
-        _batch_jobs["live"] = {"cancelled": False, "done": False}
+        _batch_jobs["live"] = {"cancelled": False}
         resp = client.post(
             "/api/batch-print/cancel",
             data=json.dumps({"jobId": "live"}),

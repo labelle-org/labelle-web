@@ -254,8 +254,16 @@ def api_batch_print():
     except (TypeError, ValueError):
         return jsonify(status="error", message="copies and pauseTime must be numeric"), 400
 
-    copies = max(1, min(MAX_BATCH_COPIES, copies))
-    pause_time = max(0.0, min(MAX_BATCH_PAUSE_SECONDS, pause_time))
+    if copies < 1 or copies > MAX_BATCH_COPIES:
+        return jsonify(
+            status="error",
+            message=f"copies must be between 1 and {MAX_BATCH_COPIES}",
+        ), 400
+    if pause_time < 0 or pause_time > MAX_BATCH_PAUSE_SECONDS:
+        return jsonify(
+            status="error",
+            message=f"pauseTime must be between 0 and {MAX_BATCH_PAUSE_SECONDS} seconds",
+        ), 400
 
     if not widgets or not isinstance(widgets, list) or len(widgets) == 0:
         return jsonify(status="error", message="No widgets provided"), 400
@@ -292,14 +300,14 @@ def api_batch_print():
             ),
         ), 400
 
-    # Only one batch job at a time
+    # Only one batch job at a time. Completed jobs are popped in `finally`
+    # below, so a non-empty dict means a job is in flight.
     with _batch_lock:
-        running = [j for j in _batch_jobs.values() if not j.get("done")]
-        if running:
+        if _batch_jobs:
             return jsonify(status="error", message="Another batch job is already running"), 409
 
         job_id = uuid.uuid4().hex
-        _batch_jobs[job_id] = {"cancelled": False, "done": False}
+        _batch_jobs[job_id] = {"cancelled": False}
 
     # Build print list: each row × copies
     print_list = []
