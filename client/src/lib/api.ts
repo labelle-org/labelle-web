@@ -18,6 +18,15 @@ interface PowerResponse extends PowerStatus {
   status?: string;
 }
 
+export interface BatchEvent {
+  event: "started" | "printing" | "printed" | "done" | "cancelled" | "error";
+  jobId?: string;
+  index?: number;
+  total?: number;
+  printed?: number;
+  message?: string;
+}
+
 export async function printLabel(
   widgets: LabelWidget[],
   settings: LabelSettings,
@@ -72,6 +81,58 @@ export async function fetchPrinters(): Promise<PrinterInfo[]> {
   }
   const data = (await res.json()) as PrintersResponse;
   return data.printers;
+}
+
+export async function batchPrint(
+  widgets: LabelWidget[],
+  settings: LabelSettings,
+  rows: Record<string, string>[],
+  copies: number,
+  pauseTime: number,
+  onProgress: (event: BatchEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch("/api/batch-print", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ widgets, settings, rows, copies, pauseTime }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as PrintResponse;
+    throw new Error(err.message);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const event = JSON.parse(line.slice(6)) as BatchEvent;
+        onProgress(event);
+      }
+    }
+  }
+}
+
+export async function cancelBatchPrint(jobId: string): Promise<void> {
+  await fetch("/api/batch-print/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId }),
+  });
 }
 
 // 404 here means the server can't resolve a controllable USB port for

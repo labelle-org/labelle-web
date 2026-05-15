@@ -75,6 +75,14 @@ export interface PowerStatus {
   connected: boolean;
 }
 
+export interface BatchState {
+  enabled: boolean;
+  copies: number;
+  pauseTime: number;
+  rows: Record<string, string>[];
+  selectedRowIndex: number | null;
+}
+
 export interface LabelSettings {
   tapeSizeMm: TapeSize;
   marginPx: number;

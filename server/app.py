@@ -1,7 +1,10 @@
+import copy
 import json
 import os
+import re
 import subprocess
 import tempfile
+import threading
 import time
 import traceback
 import uuid
@@ -10,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
@@ -34,13 +37,23 @@ _POWER_SAVE_IGNORED_PREFIXES = ("/api/power/",)
 # Routes that need the printer to be powered on. The before_request
 # hook will block on a power-on for these if the saver has turned the
 # port off.
-_PRINTER_USING_PATHS = ("/api/print", "/api/preview", "/api/printers", "/api/upload-image")
+_PRINTER_USING_PATHS = (
+    "/api/print",
+    "/api/preview",
+    "/api/printers",
+    "/api/upload-image",
+    "/api/batch-print",
+)
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
 DIST_DIR = os.path.join(os.path.dirname(__file__), "dist-client")
 UPLOAD_DIR = tempfile.mkdtemp(prefix="labelle-uploads-")
+
+# Batch job tracking
+_batch_jobs: dict[str, dict] = {}
+_batch_lock = threading.Lock()
 
 
 @app.before_request
@@ -196,6 +209,111 @@ def api_power_off():
     except _POWER_ERRORS as e:
         return _power_error_response(e)
     return jsonify(status="success", hub=hub, port=port_num, **status)
+
+
+def _substitute_widgets(widgets, values):
+    """Replace :varname: placeholders in widget text/content fields."""
+    result = copy.deepcopy(widgets)
+    pattern = re.compile(r":([a-zA-Z_]\w*):")
+    for widget in result:
+        for field in ("text", "content"):
+            if field in widget and isinstance(widget[field], str):
+                widget[field] = pattern.sub(
+                    lambda m: values.get(m.group(1), m.group(0)), widget[field]
+                )
+    return result
+
+
+@app.route("/api/batch-print", methods=["POST"])
+def api_batch_print():
+    data = request.get_json(silent=True) or {}
+    widgets = data.get("widgets")
+    settings = data.get("settings", {})
+    printer_id = settings.get("printerId")
+    rows = data.get("rows", [])
+    copies = max(1, int(data.get("copies", 1)))
+    pause_time = max(0.0, float(data.get("pauseTime", 0)))
+
+    if not widgets or not isinstance(widgets, list) or len(widgets) == 0:
+        return jsonify(status="error", message="No widgets provided"), 400
+    if not rows or not isinstance(rows, list):
+        return jsonify(status="error", message="No rows provided"), 400
+
+    # Only one batch job at a time
+    with _batch_lock:
+        running = [j for j in _batch_jobs.values() if not j.get("done")]
+        if running:
+            return jsonify(status="error", message="Another batch job is already running"), 409
+
+        job_id = uuid.uuid4().hex
+        _batch_jobs[job_id] = {"cancelled": False, "done": False}
+
+    # Build print list: each row × copies
+    print_list = []
+    for row in rows:
+        for _ in range(copies):
+            print_list.append(row)
+
+    total = len(print_list)
+
+    def generate():
+        try:
+            yield f"data: {json.dumps({'event': 'started', 'jobId': job_id, 'total': total})}\n\n"
+
+            for idx, row_values in enumerate(print_list):
+                job = _batch_jobs.get(job_id, {})
+                if job.get("cancelled"):
+                    yield f"data: {json.dumps({'event': 'cancelled', 'printed': idx})}\n\n"
+                    return
+
+                yield f"data: {json.dumps({'event': 'printing', 'index': idx, 'total': total})}\n\n"
+
+                # Keep the idle timer happy while a long batch runs — the
+                # initial before_request fires once, but the SSE stream
+                # outlives it.
+                power_save.record_activity()
+
+                substituted = _substitute_widgets(widgets, row_values)
+                try:
+                    print_label(substituted, settings, upload_dir=UPLOAD_DIR, printer_id=printer_id)
+                except Exception as e:
+                    traceback.print_exc()
+                    yield f"data: {json.dumps({'event': 'error', 'index': idx, 'message': str(e)})}\n\n"
+                    return
+
+                yield f"data: {json.dumps({'event': 'printed', 'index': idx, 'total': total})}\n\n"
+
+                # Pause between prints (except after last)
+                if pause_time > 0 and idx < total - 1:
+                    elapsed = 0.0
+                    while elapsed < pause_time:
+                        if _batch_jobs.get(job_id, {}).get("cancelled"):
+                            yield f"data: {json.dumps({'event': 'cancelled', 'printed': idx + 1})}\n\n"
+                            return
+                        time.sleep(min(0.1, pause_time - elapsed))
+                        elapsed += 0.1
+
+            yield f"data: {json.dumps({'event': 'done', 'total': total})}\n\n"
+        finally:
+            with _batch_lock:
+                if job_id in _batch_jobs:
+                    _batch_jobs[job_id]["done"] = True
+
+    return Response(generate(), mimetype="text/event-stream")
+
+
+@app.route("/api/batch-print/cancel", methods=["POST"])
+def api_batch_cancel():
+    data = request.get_json(silent=True) or {}
+    job_id = data.get("jobId", "")
+
+    with _batch_lock:
+        job = _batch_jobs.get(job_id)
+        if not job:
+            return jsonify(status="error", message="Job not found"), 404
+        job["cancelled"] = True
+
+    return jsonify(status="ok")
 
 
 def _build_info() -> dict:

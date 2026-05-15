@@ -1,11 +1,18 @@
 import { v4 as uuidv4 } from "uuid";
-import type { LabelWidget, LabelSettings } from "../types/label";
+import type { LabelWidget, LabelSettings, BatchState } from "../types/label";
 import { uploadImage } from "./api";
+
+interface LabelFileBatch {
+  copies: number;
+  pauseTime: number;
+  rows: Record<string, string>[];
+}
 
 interface LabelFile {
   version: number;
   widgets: Record<string, unknown>[];
   settings: LabelSettings;
+  batch?: LabelFileBatch;
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -32,6 +39,7 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
 export async function exportLabel(
   widgets: LabelWidget[],
   settings: LabelSettings,
+  batch?: BatchState,
 ): Promise<string> {
   const exportWidgets: Record<string, unknown>[] = [];
 
@@ -48,13 +56,26 @@ export async function exportLabel(
     }
   }
 
-  const data: LabelFile = { version: 1, settings, widgets: exportWidgets };
+  const data: LabelFile = { version: 2, settings, widgets: exportWidgets };
+
+  if (batch?.enabled) {
+    data.batch = {
+      copies: batch.copies,
+      pauseTime: batch.pauseTime,
+      rows: batch.rows,
+    };
+  }
+
   return JSON.stringify(data, null, 2);
 }
 
 export async function importLabel(
   json: string,
-): Promise<{ widgets: LabelWidget[]; settings: LabelSettings }> {
+): Promise<{
+  widgets: LabelWidget[];
+  settings: LabelSettings;
+  batch?: BatchState;
+}> {
   const data = JSON.parse(json) as LabelFile;
 
   if (!data.version || !data.widgets || !data.settings) {
@@ -78,5 +99,16 @@ export async function importLabel(
     }
   }
 
-  return { widgets, settings: data.settings };
+  let batch: BatchState | undefined;
+  if (data.batch) {
+    batch = {
+      enabled: true,
+      copies: data.batch.copies ?? 1,
+      pauseTime: data.batch.pauseTime ?? 0,
+      rows: data.batch.rows?.length ? data.batch.rows : [{}],
+      selectedRowIndex: null,
+    };
+  }
+
+  return { widgets, settings: data.settings, batch };
 }

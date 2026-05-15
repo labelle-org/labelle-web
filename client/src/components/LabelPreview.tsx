@@ -1,16 +1,26 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import { useLabelStore } from "../state/useLabelStore";
 import { fetchServerPreview } from "../lib/api";
+import { substituteWidgets } from "../lib/variables";
 
 export function LabelPreview() {
   const widgets = useLabelStore((s) => s.widgets);
   const settings = useLabelStore((s) => s.settings);
+  const batch = useLabelStore((s) => s.batch);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const prevUrlRef = useRef<string | null>(null);
 
+  const previewWidgets = useMemo(() => {
+    if (batch.enabled && batch.selectedRowIndex !== null) {
+      const row = batch.rows[batch.selectedRowIndex];
+      if (row) return substituteWidgets(widgets, row);
+    }
+    return widgets;
+  }, [widgets, batch.enabled, batch.selectedRowIndex, batch.rows]);
+
   useEffect(() => {
-    const hasContent = widgets.some((w) => {
+    const hasContent = previewWidgets.some((w) => {
       if (w.type === "text") return w.text.trim().length > 0;
       if (w.type === "qr" || w.type === "barcode") return w.content.trim().length > 0;
       if (w.type === "image") return w.filename.length > 0;
@@ -31,7 +41,7 @@ export function LabelPreview() {
     setLoading(true);
 
     const timer = setTimeout(() => {
-      fetchServerPreview(widgets, settings, controller.signal)
+      fetchServerPreview(previewWidgets, settings, controller.signal)
         .then((url) => {
           if (prevUrlRef.current) {
             URL.revokeObjectURL(prevUrlRef.current);
@@ -51,7 +61,7 @@ export function LabelPreview() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [widgets, settings]);
+  }, [previewWidgets, settings]);
 
   return (
     <div className="bg-white rounded-lg shadow p-4">

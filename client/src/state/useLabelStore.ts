@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import type {
   LabelWidget,
   LabelSettings,
+  BatchState,
   TextWidget,
   QrWidget,
   BarcodeWidget,
@@ -11,10 +12,19 @@ import type {
 } from "../types/label";
 import { DEFAULT_MARGIN_PX, DEFAULT_FONT_SCALE } from "../lib/constants";
 
+const DEFAULT_BATCH: BatchState = {
+  enabled: false,
+  copies: 1,
+  pauseTime: 0,
+  rows: [{}],
+  selectedRowIndex: null,
+};
+
 interface LabelStore {
   widgets: LabelWidget[];
   settings: LabelSettings;
   availablePrinters: PrinterInfo[];
+  batch: BatchState;
 
   addTextWidget: () => void;
   addQrWidget: () => void;
@@ -25,7 +35,15 @@ interface LabelStore {
   updateWidget: (id: string, patch: Partial<LabelWidget>) => void;
   updateSettings: (patch: Partial<LabelSettings>) => void;
   setAvailablePrinters: (printers: PrinterInfo[]) => void;
-  loadLabel: (widgets: LabelWidget[], settings: LabelSettings) => void;
+  updateBatch: (patch: Partial<BatchState>) => void;
+  setBatchRow: (rowIndex: number, varName: string, value: string) => void;
+  addBatchRow: () => void;
+  removeBatchRow: (index: number) => void;
+  loadLabel: (
+    widgets: LabelWidget[],
+    settings: LabelSettings,
+    batch?: BatchState,
+  ) => void;
 }
 
 export const useLabelStore = create<LabelStore>((set) => ({
@@ -52,6 +70,8 @@ export const useLabelStore = create<LabelStore>((set) => ({
   },
 
   availablePrinters: [],
+
+  batch: { ...DEFAULT_BATCH },
 
   addTextWidget: () =>
     set((s) => ({
@@ -132,5 +152,35 @@ export const useLabelStore = create<LabelStore>((set) => ({
 
   setAvailablePrinters: (printers) => set({ availablePrinters: printers }),
 
-  loadLabel: (widgets, settings) => set({ widgets, settings }),
+  updateBatch: (patch) =>
+    set((s) => ({ batch: { ...s.batch, ...patch } })),
+
+  setBatchRow: (rowIndex, varName, value) =>
+    set((s) => {
+      const rows = s.batch.rows.map((row, i) =>
+        i === rowIndex ? { ...row, [varName]: value } : row,
+      );
+      return { batch: { ...s.batch, rows } };
+    }),
+
+  addBatchRow: () =>
+    set((s) => ({
+      batch: { ...s.batch, rows: [...s.batch.rows, {}] },
+    })),
+
+  removeBatchRow: (index) =>
+    set((s) => {
+      const rows = s.batch.rows.filter((_, i) => i !== index);
+      const selectedRowIndex =
+        s.batch.selectedRowIndex === index
+          ? null
+          : s.batch.selectedRowIndex !== null &&
+              s.batch.selectedRowIndex > index
+            ? s.batch.selectedRowIndex - 1
+            : s.batch.selectedRowIndex;
+      return { batch: { ...s.batch, rows: rows.length ? rows : [{}], selectedRowIndex } };
+    }),
+
+  loadLabel: (widgets, settings, batch) =>
+    set({ widgets, settings, batch: batch ?? { ...DEFAULT_BATCH } }),
 }));

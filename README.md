@@ -29,7 +29,8 @@ You can fight against AI usage or learn to embrace it as a new way of working. I
 - **Per-widget font styles** -- each text widget can have its own font style, scale, frame, and alignment
 - **Multi-printer support** -- automatically detects all connected DYMO printers; select specific printer when multiple are available
 - **Virtual printers** -- configure virtual printers that save labels as PNG images, JSON data, or both (great for testing, archiving, and development)
-- **Save/load labels** -- export label designs to JSON files and load them back, with embedded image data for portability
+- **Batch print** -- print multiple labels with variable content using `:varname:` placeholders, with a table to fill in values per row, configurable copies and pause time, SSE progress streaming, and cancellation support
+- **Save/load labels** -- export label designs to JSON files and load them back, with embedded image data and batch configuration for portability
 - **Print via labelle** -- sends labels to the printer using the labelle Python library over USB
 - **USB power save** -- optionally power off the printer's USB port via uhubctl when the server is idle, and power it back on automatically when the page is opened (opt-in via `USB_POWER_SAVE=true`)
 
@@ -130,8 +131,8 @@ journalctl -u labelle-web -f
 labelle-web/
   client/                   # Vite + React + TypeScript frontend
     src/
-      components/           # React UI components
-      lib/                  # API client, constants
+      components/           # React UI components (BatchPanel, PrintButton, etc.)
+      lib/                  # API client, constants, variable substitution
       state/                # Zustand store
       types/                # TypeScript type definitions
   server/                   # Python/Flask backend
@@ -142,9 +143,10 @@ labelle-web/
     virtual_printer.py      # Virtual printer implementation (saves PNGs/JSON to disk)
     requirements.txt        # Python dependencies
     tests/                  # Backend tests (pytest)
+  docs/                     # Documentation and screenshots
 ```
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentation.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentation.
 
 ## Configuration
 
@@ -235,6 +237,36 @@ Upload an image for use in image widgets. Accepts `multipart/form-data` with a `
 **Response:** `{ "filename": "uuid.png" }`
 
 The returned filename is used in the `image` widget's `filename` field for subsequent print/preview requests.
+
+### `POST /api/batch-print`
+
+Print multiple labels with variable substitution. Uses Server-Sent Events (SSE) for streaming progress.
+
+**Request body:**
+```json
+{
+  "widgets": [ ... ],
+  "settings": { ... },
+  "rows": [
+    { "name": "Alice", "id": "001" },
+    { "name": "Bob", "id": "002" }
+  ],
+  "copies": 2,
+  "pauseTime": 1.0
+}
+```
+
+Widget text/content fields use `:varname:` placeholders (e.g. `Hello :name:`) which are substituted per row.
+
+**SSE events:** `started` (with jobId, total), `printing`, `printed`, `done`, `cancelled`, `error`
+
+Returns HTTP 409 if another batch job is already running.
+
+### `POST /api/batch-print/cancel`
+
+Cancel a running batch print job. The server finishes the current label then stops.
+
+**Request body:** `{ "jobId": "..." }`
 
 ### `GET /api/power/status`, `POST /api/power/on`, `POST /api/power/off`
 
