@@ -312,6 +312,24 @@ class TestBatchPrintExecution:
         assert second_call_widgets[0]["text"] == "Hello Bob"
 
     @patch("app.print_label")
+    def test_substitutes_hyphenated_variable_names(self, mock_print, client):
+        """{{first-name}} should be a valid placeholder (hyphens allowed)."""
+        widget = {"type": "text", "text": "Hi {{first-name}}", "id": "1"}
+        resp = client.post(
+            "/api/batch-print",
+            data=json.dumps({
+                "widgets": [widget],
+                "settings": _settings(),
+                "rows": [{"first-name": "Alice"}],
+            }),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        _read_sse(resp)
+        call_widgets = mock_print.call_args_list[0][0][0]
+        assert call_widgets[0]["text"] == "Hi Alice"
+
+    @patch("app.print_label")
     def test_missing_value_leaves_placeholder_literal(self, mock_print, client):
         # Rationale: visible "you forgot" indicator. Empty-string values
         # are substituted as empty (separate behavior).

@@ -249,6 +249,22 @@ describe("Variable rename in batch rows", () => {
     expect(rowValues(0)).toEqual({ name: "Alice", age: "30" });
   });
 
+  it("detects and renames hyphenated variable names", () => {
+    const id = seedTextWidgetWith("Hi {{first-name}}");
+    useLabelStore.setState({
+      batch: {
+        copies: 1,
+        pauseTime: 0,
+        rows: seedRows([{ "first-name": "Alice" }]),
+        selectedRowIndex: null,
+      },
+    });
+
+    useLabelStore.getState().updateWidget(id, { text: "Hi {{full-name}}" });
+
+    expect(rowValues(0)).toEqual({ "full-name": "Alice" });
+  });
+
   it("preserves row id across rename migration", () => {
     const id = seedTextWidgetWith("{{name}}");
     useLabelStore.setState({

@@ -242,7 +242,7 @@ def api_power_off():
     return jsonify(status="success", hub=hub, port=port_num, **status)
 
 
-_VAR_PATTERN = re.compile(r"\{\{(\w+)\}\}")
+_VAR_PATTERN = re.compile(r"\{\{([\w-]+)\}\}")
 
 
 def _substitute_widgets(widgets, values):

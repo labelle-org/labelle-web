@@ -74,7 +74,7 @@ The selected `printerId` is stored in `settings` and sent with print requests.
 
 The batch print feature allows printing multiple labels with variable content (e.g. name badges, asset tags).
 
-**Variable syntax:** `{{varname}}` in text, QR, or barcode widget content fields. Variables are auto-detected via regex in `lib/variables.ts` using `detectVariables()`, which runs in components via `useMemo` (derived, not stored). The double-brace form was chosen over `:name:` (1.6.0–1.6.1) because colons are common in legitimate QR/barcode content (URLs, IPv6 literals, key:value pairs) and caused false matches.
+**Variable syntax:** `{{varname}}` in text, QR, or barcode widget content fields. Names match `[\w-]+` so letters, digits, underscores, and hyphens are all allowed (e.g. `{{first-name}}`). Variables are auto-detected via regex in `lib/variables.ts` using `detectVariables()`, which runs in components via `useMemo` (derived, not stored). The double-brace form was chosen over `:name:` (1.6.0–1.6.1) because colons are common in legitimate QR/barcode content (URLs, IPv6 literals, key:value pairs) and caused false matches.
 
 **`BatchPanel`** is a collapsible `<details>` panel that shows:
 - Copies per row and pause time between prints
