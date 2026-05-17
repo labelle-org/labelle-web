@@ -74,7 +74,7 @@ The selected `printerId` is stored in `settings` and sent with print requests.
 
 The batch print feature allows printing multiple labels with variable content (e.g. name badges, asset tags).
 
-**Variable syntax:** `:varname:` in text, QR, or barcode widget content fields. Variables are auto-detected via regex in `lib/variables.ts` using `detectVariables()`, which runs in components via `useMemo` (derived, not stored).
+**Variable syntax:** `{{varname}}` in text, QR, or barcode widget content fields. Names match `[\w-]+` so letters, digits, underscores, and hyphens are all allowed (e.g. `{{first-name}}`). Variables are auto-detected via regex in `lib/variables.ts` using `detectVariables()`, which runs in components via `useMemo` (derived, not stored). The double-brace form was chosen over `:name:` (1.6.0–1.6.1) because colons are common in legitimate QR/barcode content (URLs, IPv6 literals, key:value pairs) and caused false matches.
 
 **`BatchPanel`** is a collapsible `<details>` panel that shows:
 - Copies per row and pause time between prints
@@ -86,7 +86,7 @@ The batch print feature allows printing multiple labels with variable content (e
 
 **Print order:** row-major. With N rows and C copies the printer outputs `row1 × C, row2 × C, …` so each label's copies stay together — this matches the common "N copies of each" case where users tear off a stack per recipient. Copy-major ordering (`row1 row2 … rowN` repeated C times) is not currently supported.
 
-**Variable rename heuristic:** when a `updateWidget` edit removes one variable from a widget and adds another, the store treats it as a rename — batch row values follow the new name, and any other widgets referencing the old name are rewritten. The heuristic is set-diff over the widget's variables and has a known limitation: keystroke-by-keystroke typing in a real `<input>` (e.g. `:name:` → `:names` → `:names:`) produces an intermediate state with no closing colon, where the regex sees a pure removal followed later by a pure addition. The row value for `name` orphans in that case. In practice users edit via select-and-replace or paste, which works correctly; orphaned values reappear if the original name is typed back.
+**Variable rename heuristic:** when a `updateWidget` edit removes one variable from a widget and adds another, the store treats it as a rename — batch row values follow the new name, and any other widgets referencing the old name are rewritten. The heuristic is set-diff over the widget's variables and has a known limitation: keystroke-by-keystroke typing in a real `<input>` (e.g. `{{name}}` → `{{names}` → `{{names}}`) produces an intermediate state with no closing braces, where the regex sees a pure removal followed later by a pure addition. The row value for `name` orphans in that case. In practice users edit via select-and-replace or paste, which works correctly; orphaned values reappear if the original name is typed back.
 
 ### Type Definitions
 
@@ -183,7 +183,7 @@ POST /api/preview
 POST /api/batch-print (SSE streaming)
   -> app.py (api_batch_print)
     -> For each row × copies:
-      -> _substitute_widgets(widgets, row)    # Replace :varname: placeholders
+      -> _substitute_widgets(widgets, row)    # Replace {{varname}} placeholders
       -> label_builder.print_label(...)       # Print one label
       -> SSE event: printing/printed
     -> Check cancellation flag between prints (during pause sleep)

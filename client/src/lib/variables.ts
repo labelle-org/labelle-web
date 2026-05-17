@@ -1,6 +1,6 @@
 import type { LabelWidget } from "../types/label";
 
-const VAR_REGEX = /:(\w+):/g;
+const VAR_REGEX = /\{\{([\w-]+)\}\}/g;
 
 export function detectVariables(widgets: LabelWidget[]): string[] {
   const vars = new Set<string>();

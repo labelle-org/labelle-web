@@ -242,11 +242,11 @@ def api_power_off():
     return jsonify(status="success", hub=hub, port=port_num, **status)
 
 
-_VAR_PATTERN = re.compile(r":(\w+):")
+_VAR_PATTERN = re.compile(r"\{\{([\w-]+)\}\}")
 
 
 def _substitute_widgets(widgets, values):
-    """Replace :varname: placeholders in widget text/content fields.
+    """Replace {{varname}} placeholders in widget text/content fields.
 
     Each widget is shallow-copied because only the immutable string fields
     `text`/`content` are reassigned — deepcopy was wasteful per row × per

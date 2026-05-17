@@ -78,7 +78,7 @@ export function BatchPanel() {
     const existing = new Set(detectVariables(state.widgets));
     let i = 1;
     while (existing.has(`var${i}`)) i++;
-    const placeholder = `:var${i}:`;
+    const placeholder = `{{var${i}}}`;
 
     const firstText = state.widgets.find((w) => w.type === "text");
     if (firstText) {
@@ -103,7 +103,7 @@ export function BatchPanel() {
         {variables.length === 0 ? (
           <div className="space-y-2">
             <p className="text-gray-400 text-xs">
-              Add a variable, or type <code className="bg-gray-100 px-1 rounded">:varname:</code> into a widget.
+              Add a variable, or type <code className="bg-gray-100 px-1 rounded">{`{{varname}}`}</code> into a widget.
             </p>
             <button
               className="text-blue-600 hover:text-blue-800 text-xs"

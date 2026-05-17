@@ -164,11 +164,11 @@ export const useLabelStore = create<LabelStore>((set) => ({
       // and remove.
       //
       // Known limitation: keystroke-by-keystroke typing in a controlled
-      // <input> (e.g. :name: -> :names -> :names:) hits an intermediate
-      // state with no closing colon, where detectVariables returns [].
-      // The transition then looks like a pure removal followed (one
-      // keystroke later) by a pure addition — neither half triggers the
-      // rename branch, and the row value for the old name orphans. In
+      // <input> (e.g. {{name}} -> {{names} -> {{names}}) hits an
+      // intermediate state with no closing braces, where detectVariables
+      // returns []. The transition then looks like a pure removal followed
+      // (one keystroke later) by a pure addition — neither half triggers
+      // the rename branch, and the row value for the old name orphans. In
       // practice users edit via select-and-replace or paste, which works.
       // See docs/ARCHITECTURE.md "Variable rename heuristic" for context.
       const before = detectVariables([oldWidget]);
@@ -179,9 +179,10 @@ export const useLabelStore = create<LabelStore>((set) => ({
       if (removed.length === 1 && added.length === 1) {
         const oldName = removed[0]!;
         const newName = added[0]!;
-        // Variable names match \w+ — no regex escaping needed.
-        const placeholderRe = new RegExp(`:${oldName}:`, "g");
-        const newPlaceholder = `:${newName}:`;
+        // Variable names match [\w-]+; none of those characters need regex
+        // escaping (hyphen is only a metacharacter inside character classes).
+        const placeholderRe = new RegExp(`\\{\\{${oldName}\\}\\}`, "g");
+        const newPlaceholder = `{{${newName}}}`;
 
         const widgets = s.widgets.map((w) => {
           if (w.id === id) return newWidget;
@@ -196,8 +197,8 @@ export const useLabelStore = create<LabelStore>((set) => ({
         });
 
         // Migrate row values keys. If `newName` already existed in the
-        // row (e.g. user renamed `:name:` -> `:full_name:` while
-        // another widget already used `:full_name:`), the rename takes
+        // row (e.g. user renamed `{{name}}` -> `{{full_name}}` while
+        // another widget already used `{{full_name}}`), the rename takes
         // precedence and the prior value is overwritten — the user's
         // most recent edit wins.
         const rows = s.batch.rows.map((row) => {
