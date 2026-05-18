@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLabelStore } from "../state/useLabelStore";
 import { detectVariables } from "../lib/variables";
 import {
@@ -48,6 +48,27 @@ export function BatchPanel() {
   useEffect(() => {
     if (hasVariables) setOpen(true);
   }, [hasVariables]);
+
+  // Auto-select row 0 on the false->true transition of hasVariables so the
+  // preview substitutes immediately when batch mode first activates (button
+  // click or typing {{...}} into a widget). The transition check is
+  // load-bearing: a plain "select if null" effect would fight the user every
+  // time they deselect via the eye icon (which sets selectedRowIndex back to
+  // null). On initial mount the ref captures the starting value, so a loaded
+  // file's selectedRowIndex is preserved.
+  const prevHasVariablesRef = useRef(hasVariables);
+  useEffect(() => {
+    const prev = prevHasVariablesRef.current;
+    prevHasVariablesRef.current = hasVariables;
+    if (
+      !prev &&
+      hasVariables &&
+      batch.selectedRowIndex === null &&
+      batch.rows.length > 0
+    ) {
+      updateBatch({ selectedRowIndex: 0 });
+    }
+  }, [hasVariables, batch.selectedRowIndex, batch.rows.length, updateBatch]);
 
   // Local string state for number inputs so the user can clear and retype
   // without the value snapping back to a clamped minimum mid-edit.
