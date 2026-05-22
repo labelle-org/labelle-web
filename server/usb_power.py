@@ -26,6 +26,19 @@ _HUB_LINE_RE = re.compile(r"Current status for hub (\S+)")
 _PORT_DEVICE_RE = re.compile(r"\s+Port (\d+):.*\[(\S+) ")
 _PORT_LINE_RE = re.compile(r"\s+Port (\d+):\s+(\w+)(.*)")
 
+# Latch the "uhubctl missing" warning so we log it once at first call
+# rather than re-spamming every /api/power/status poll. Reset only
+# matters for tests, which monkeypatch `_run`'s subprocess call.
+#
+# Intentionally unlocked: under waitress's threaded serving a concurrent
+# request burst at startup can log the warning a handful of extra times
+# before the latch settles, but the race window is microseconds and is
+# self-limiting — once True, no further races possible. A lock would
+# add per-call overhead to every _run() (incl. the happy path on hosts
+# where uhubctl is present) for a worst-case of N duplicate log lines
+# once per process lifetime. Same trade-off as `_last_known_port` below.
+_uhubctl_missing_logged = False
+
 
 def _invalidate_libusb_cache() -> None:
     """Drop pyusb's cached libusb context so the next scan re-enumerates.
@@ -50,18 +63,36 @@ def _invalidate_libusb_cache() -> None:
 
 
 def _run(*args: str) -> str:
-    result = subprocess.run(
-        [UHUBCTL_BIN, *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=10,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            [UHUBCTL_BIN, *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            check=True,
+        )
+    except FileNotFoundError:
+        global _uhubctl_missing_logged
+        if not _uhubctl_missing_logged:
+            logger.warning(
+                "uhubctl executable not found (%r); USB power-cycle features "
+                "disabled. Install uhubctl (e.g. `sudo apt install uhubctl`) "
+                "or set UHUBCTL_BIN to a working path.",
+                UHUBCTL_BIN,
+            )
+            _uhubctl_missing_logged = True
+        raise
     return result.stdout.decode()
 
 
 def find_printer_port(vendor_product_id: str = DYMO_USB_ID) -> tuple[str, int] | None:
-    """Locate (hub, port) for a USB device by `VVVV:PPPP` id, or None if absent."""
+    """Locate (hub, port) for a USB device by `VVVV:PPPP` id, or None if absent.
+
+    Raises FileNotFoundError if the uhubctl executable can't be found (not on
+    PATH, or UHUBCTL_BIN points at a missing path); callers should catch
+    that and surface it as "no controllable printer". See
+    find_or_recall_printer_port for the cache-aware variant the API uses.
+    """
     output = _run()
     current_hub: str | None = None
     for line in output.splitlines():
@@ -204,9 +235,17 @@ def find_or_recall_printer_port(
     new value to disk, so a container restart picks up where we left off.
 
     Thread safety: best-effort, see `_last_known_port` comment above.
+
+    When uhubctl is missing entirely, the cached port is useless — every
+    downstream operation (`get_port_status`, `set_port_power`) would also
+    fail. Return None outright in that case so /api/power/* renders as
+    404 "no controllable printer" rather than 500-trampling on the cache.
     """
     global _last_known_port
-    found = find_printer_port(vendor_product_id)
+    try:
+        found = find_printer_port(vendor_product_id)
+    except FileNotFoundError:
+        return None
     if found and found != _last_known_port:
         _last_known_port = found
         _save_state(*found)

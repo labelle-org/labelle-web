@@ -69,6 +69,45 @@ class TestFindPrinterPort:
         assert usb_power.find_printer_port("0922:1002") is None
 
 
+class TestUhubctlMissing:
+    """When uhubctl isn't installed (e.g. local dev outside Docker),
+    subprocess.run raises FileNotFoundError. Surface that as a benign
+    "no controllable printer" path so /api/power/* returns 404 (which
+    the frontend already treats as "hide the toggle") instead of
+    spamming a 500-traceback on every poll."""
+
+    def setup_method(self):
+        usb_power._uhubctl_missing_logged = False
+        usb_power._last_known_port = None
+
+    def test_find_printer_port_raises_filenotfound(self, mock_run):
+        mock_run.side_effect = FileNotFoundError(2, "No such file", "uhubctl")
+        with pytest.raises(FileNotFoundError):
+            usb_power.find_printer_port()
+
+    def test_find_or_recall_returns_none_with_no_cache(self, mock_run):
+        mock_run.side_effect = FileNotFoundError(2, "No such file", "uhubctl")
+        assert usb_power.find_or_recall_printer_port() is None
+
+    def test_find_or_recall_bypasses_cache_when_uhubctl_missing(self, mock_run):
+        # Regression: a state.json from a prior run on a host that had
+        # uhubctl leaves _last_known_port set. If uhubctl is now missing,
+        # returning that cached port would cause /api/power/* to proceed,
+        # then 500 in get_port_status() — the symptom this PR aims to fix.
+        usb_power._last_known_port = ("1-1", 3)
+        mock_run.side_effect = FileNotFoundError(2, "No such file", "uhubctl")
+        assert usb_power.find_or_recall_printer_port() is None
+
+    def test_warning_logged_once_across_repeat_calls(self, mock_run, caplog):
+        mock_run.side_effect = FileNotFoundError(2, "No such file", "uhubctl")
+        with caplog.at_level("WARNING", logger="usb_power"):
+            usb_power.find_or_recall_printer_port()
+            usb_power.find_or_recall_printer_port()
+            usb_power.find_or_recall_printer_port()
+        uhubctl_warnings = [r for r in caplog.records if "uhubctl" in r.message]
+        assert len(uhubctl_warnings) == 1
+
+
 class TestGetPortStatus:
     def test_powered_with_device_connected(self, mock_run):
         mock_run.return_value = _result(UHUBCTL_PORT_ON)

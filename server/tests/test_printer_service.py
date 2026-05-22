@@ -83,6 +83,32 @@ class TestListPrintersUsbScanFailure:
 
         assert list_printers() == []
 
+    @patch("printer_service.DeviceManager")
+    def test_no_devices_logs_info_without_traceback(
+        self, mock_dm_cls, no_virtual_printers_env, caplog
+    ):
+        # labelle.scan() raises DeviceManagerNoDevices when no DYMO is
+        # plugged in. That is an expected state — make sure it surfaces
+        # as a single INFO line, not a noisy traceback, and the result
+        # is still a (possibly empty) list rather than a crash.
+        from labelle.lib.devices.device_manager import DeviceManagerNoDevices
+
+        mock_dm = MagicMock()
+        mock_dm.scan.side_effect = DeviceManagerNoDevices("No supported devices found")
+        mock_dm_cls.return_value = mock_dm
+
+        from printer_service import list_printers
+
+        with caplog.at_level("INFO", logger="printer_service"):
+            result = list_printers()
+
+        assert result == []
+        info_msgs = [
+            r.message for r in caplog.records
+            if r.levelname == "INFO" and "DYMO" in r.message
+        ]
+        assert len(info_msgs) == 1
+
 
 class TestAutoSelectWithVirtualPrinters:
     @patch("printer_service.DeviceManager")
