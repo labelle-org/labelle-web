@@ -1,13 +1,16 @@
+import logging
 import traceback
 
 from PIL import Image
 
-from labelle.lib.devices.device_manager import DeviceManager
+from labelle.lib.devices.device_manager import DeviceManager, DeviceManagerNoDevices
 from labelle.lib.devices.dymo_labeler import DymoLabeler
 
 from config import get_virtual_printers
 from label_builder import render_payload, render_preview
 from virtual_printer import VirtualPrinter
+
+logger = logging.getLogger(__name__)
 
 # Note: libusb cache invalidation lives in `usb_power.power_on()`, not
 # here. Scans rely on the cache being already-fresh from the last power
@@ -66,6 +69,11 @@ def list_printers() -> list[dict]:
                 "vendorProductId": dev.vendor_product_id,
                 "serialNumber": dev.serial_number,
             })
+    except DeviceManagerNoDevices:
+        # Expected state when no DYMO is plugged in (e.g. local dev or a
+        # host with only virtual printers). Surface as INFO without a
+        # traceback so the console stays clean across plug/unplug cycles.
+        logger.info("No USB DYMO printers detected.")
     except Exception:
         traceback.print_exc()
 
