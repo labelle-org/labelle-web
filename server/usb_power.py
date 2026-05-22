@@ -29,6 +29,14 @@ _PORT_LINE_RE = re.compile(r"\s+Port (\d+):\s+(\w+)(.*)")
 # Latch the "uhubctl missing" warning so we log it once at first call
 # rather than re-spamming every /api/power/status poll. Reset only
 # matters for tests, which monkeypatch `_run`'s subprocess call.
+#
+# Intentionally unlocked: under waitress's threaded serving a concurrent
+# request burst at startup can log the warning a handful of extra times
+# before the latch settles, but the race window is microseconds and is
+# self-limiting — once True, no further races possible. A lock would
+# add per-call overhead to every _run() (incl. the happy path on hosts
+# where uhubctl is present) for a worst-case of N duplicate log lines
+# once per process lifetime. Same trade-off as `_last_known_port` below.
 _uhubctl_missing_logged = False
 
 
