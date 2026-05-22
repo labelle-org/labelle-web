@@ -67,8 +67,9 @@ def _run(*args: str) -> str:
         global _uhubctl_missing_logged
         if not _uhubctl_missing_logged:
             logger.warning(
-                "uhubctl not found on PATH (%r); USB power-cycle features disabled. "
-                "Install uhubctl to enable (e.g. `sudo apt install uhubctl`).",
+                "uhubctl executable not found (%r); USB power-cycle features "
+                "disabled. Install uhubctl (e.g. `sudo apt install uhubctl`) "
+                "or set UHUBCTL_BIN to a working path.",
                 UHUBCTL_BIN,
             )
             _uhubctl_missing_logged = True
