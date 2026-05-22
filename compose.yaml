@@ -1,6 +1,6 @@
 services:
   labelle-web:
-    image: ghcr.io/szrudi/labelle-web:latest
+    image: ghcr.io/labelle-org/labelle-web:latest
     build:
       context: .
       args:
