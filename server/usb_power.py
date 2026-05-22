@@ -26,6 +26,11 @@ _HUB_LINE_RE = re.compile(r"Current status for hub (\S+)")
 _PORT_DEVICE_RE = re.compile(r"\s+Port (\d+):.*\[(\S+) ")
 _PORT_LINE_RE = re.compile(r"\s+Port (\d+):\s+(\w+)(.*)")
 
+# Latch the "uhubctl missing" warning so we log it once at first call
+# rather than re-spamming every /api/power/status poll. Reset only
+# matters for tests, which monkeypatch `_run`'s subprocess call.
+_uhubctl_missing_logged = False
+
 
 def _invalidate_libusb_cache() -> None:
     """Drop pyusb's cached libusb context so the next scan re-enumerates.
@@ -50,19 +55,38 @@ def _invalidate_libusb_cache() -> None:
 
 
 def _run(*args: str) -> str:
-    result = subprocess.run(
-        [UHUBCTL_BIN, *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=10,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            [UHUBCTL_BIN, *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            check=True,
+        )
+    except FileNotFoundError:
+        global _uhubctl_missing_logged
+        if not _uhubctl_missing_logged:
+            logger.warning(
+                "uhubctl not found on PATH (%r); USB power-cycle features disabled. "
+                "Install uhubctl to enable (e.g. `sudo apt install uhubctl`).",
+                UHUBCTL_BIN,
+            )
+            _uhubctl_missing_logged = True
+        raise
     return result.stdout.decode()
 
 
 def find_printer_port(vendor_product_id: str = DYMO_USB_ID) -> tuple[str, int] | None:
-    """Locate (hub, port) for a USB device by `VVVV:PPPP` id, or None if absent."""
-    output = _run()
+    """Locate (hub, port) for a USB device by `VVVV:PPPP` id, or None if absent.
+
+    Returns None when uhubctl isn't installed — the API layer surfaces that
+    as 404 "no controllable printer", which the frontend already treats as
+    "hide the power-toggle UI". A single warning is logged at first miss.
+    """
+    try:
+        output = _run()
+    except FileNotFoundError:
+        return None
     current_hub: str | None = None
     for line in output.splitlines():
         if m := _HUB_LINE_RE.match(line):
