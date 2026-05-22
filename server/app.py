@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import os
 import re
@@ -12,6 +13,16 @@ import uuid
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+# Configure root logging before any module-level loggers emit. Python's
+# default root level is WARNING, which silently drops INFO messages
+# from our service modules (e.g. printer_service's "no DYMO detected"
+# diagnostic). LOG_LEVEL can override for production deployments that
+# want a quieter or chattier server.
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
