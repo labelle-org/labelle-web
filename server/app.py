@@ -19,10 +19,27 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 # actually look at). `.env.example` sets LOG_LEVEL=DEBUG so dev defaults
 # to verbose via `npm run dev`; production deployments without a .env
 # stay at WARNING, or can dial up via the env var as needed.
+#
+# Resolve LOG_LEVEL defensively: passing an unrecognized value (typo,
+# numeric like "20", whitespace) straight to basicConfig would raise
+# ValueError at import and prevent the server from starting. Fall back
+# to WARNING and surface the bad value once logging is configured.
+_raw_log_level = os.environ.get("LOG_LEVEL", "WARNING").upper()
+_log_level = getattr(logging, _raw_log_level, None)
+if not isinstance(_log_level, int):
+    _log_level = logging.WARNING
+
 logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "WARNING").upper(),
+    level=_log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+
+if os.environ.get("LOG_LEVEL") is not None and not isinstance(
+    getattr(logging, os.environ["LOG_LEVEL"].upper(), None), int
+):
+    logging.warning(
+        "Unrecognized LOG_LEVEL=%r; using WARNING.", os.environ["LOG_LEVEL"]
+    )
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
