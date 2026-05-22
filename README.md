@@ -1,6 +1,6 @@
 # Labelle Web
 
-[![Tests](https://github.com/szrudi/labelle-web/actions/workflows/test.yml/badge.svg)](https://github.com/szrudi/labelle-web/actions/workflows/test.yml)
+[![Tests](https://github.com/labelle-org/labelle-web/actions/workflows/test.yml/badge.svg)](https://github.com/labelle-org/labelle-web/actions/workflows/test.yml)
 
 A web interface for [labelle](https://github.com/labelle-org/labelle) DYMO label printers. Compose labels with text, QR codes, barcodes, and images in your browser, with a live server-side preview and one-click printing.
 
@@ -50,7 +50,7 @@ docker compose up -d
 
 The app will be available at `http://<host>:5000`.
 
-Pre-built images for **amd64** and **arm64** (Raspberry Pi) are published to `ghcr.io/szrudi/labelle-web`. The `compose.yaml` pulls the latest image by default; if you'd rather build locally, run `docker compose up -d --build`.
+Pre-built images for **amd64** and **arm64** (Raspberry Pi) are published to `ghcr.io/labelle-org/labelle-web`. The `compose.yaml` pulls the latest image by default; if you'd rather build locally, run `docker compose up -d --build`.
 
 The container includes Python and the labelle library -- no host-level Python installation needed. USB passthrough is configured in `compose.yaml` so the container can talk to your DYMO printer.
 

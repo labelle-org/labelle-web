@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const REPO_URL = "https://github.com/szrudi/labelle-web";
+const REPO_URL = "https://github.com/labelle-org/labelle-web";
 
 interface HealthInfo {
   version: string;
@@ -35,7 +35,7 @@ export function Footer() {
   useEffect(() => {
     if (!health?.version || !onMain) return;
     const controller = new AbortController();
-    fetch("https://api.github.com/repos/szrudi/labelle-web/releases/latest", {
+    fetch("https://api.github.com/repos/labelle-org/labelle-web/releases/latest", {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
@@ -60,28 +60,6 @@ export function Footer() {
 
   return (
     <footer className="mt-8 text-center text-xs text-gray-400">
-      <div className="mx-auto mb-3 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
-        <strong>Heads up:</strong> labelle-web has moved to{" "}
-        <a
-          href="https://github.com/labelle-org/labelle-web"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium underline hover:text-amber-700"
-        >
-          labelle-org/labelle-web
-        </a>
-        . Update <code>compose.yaml</code> to pull{" "}
-        <code>ghcr.io/labelle-org/labelle-web:latest</code>.{" "}
-        <a
-          href="https://github.com/labelle-org/labelle/issues/139"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-amber-700"
-        >
-          Context
-        </a>
-        .
-      </div>
       <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
         Labelle Web
       </a>{" "}
