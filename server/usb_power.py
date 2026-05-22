@@ -79,14 +79,11 @@ def _run(*args: str) -> str:
 def find_printer_port(vendor_product_id: str = DYMO_USB_ID) -> tuple[str, int] | None:
     """Locate (hub, port) for a USB device by `VVVV:PPPP` id, or None if absent.
 
-    Returns None when uhubctl isn't installed — the API layer surfaces that
-    as 404 "no controllable printer", which the frontend already treats as
-    "hide the power-toggle UI". A single warning is logged at first miss.
+    Raises FileNotFoundError if uhubctl isn't on PATH; callers should catch
+    that and surface it as "no controllable printer". See
+    find_or_recall_printer_port for the cache-aware variant the API uses.
     """
-    try:
-        output = _run()
-    except FileNotFoundError:
-        return None
+    output = _run()
     current_hub: str | None = None
     for line in output.splitlines():
         if m := _HUB_LINE_RE.match(line):
@@ -228,9 +225,17 @@ def find_or_recall_printer_port(
     new value to disk, so a container restart picks up where we left off.
 
     Thread safety: best-effort, see `_last_known_port` comment above.
+
+    When uhubctl is missing entirely, the cached port is useless — every
+    downstream operation (`get_port_status`, `set_port_power`) would also
+    fail. Return None outright in that case so /api/power/* renders as
+    404 "no controllable printer" rather than 500-trampling on the cache.
     """
     global _last_known_port
-    found = find_printer_port(vendor_product_id)
+    try:
+        found = find_printer_port(vendor_product_id)
+    except FileNotFoundError:
+        return None
     if found and found != _last_known_port:
         _last_known_port = found
         _save_state(*found)
