@@ -14,13 +14,13 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-# Configure root logging before any module-level loggers emit. Python's
-# default root level is WARNING, which silently drops INFO messages
-# from our service modules (e.g. printer_service's "no DYMO detected"
-# diagnostic). LOG_LEVEL can override for production deployments that
-# want a quieter or chattier server.
+# Configure root logging before any module-level loggers emit. Default
+# is WARNING (production-safe — only surface things an operator should
+# actually look at). `.env.example` sets LOG_LEVEL=DEBUG so dev defaults
+# to verbose via `npm run dev`; production deployments without a .env
+# stay at WARNING, or can dial up via the env var as needed.
 logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    level=os.environ.get("LOG_LEVEL", "WARNING").upper(),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 

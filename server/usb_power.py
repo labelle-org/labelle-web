@@ -88,7 +88,8 @@ def _run(*args: str) -> str:
 def find_printer_port(vendor_product_id: str = DYMO_USB_ID) -> tuple[str, int] | None:
     """Locate (hub, port) for a USB device by `VVVV:PPPP` id, or None if absent.
 
-    Raises FileNotFoundError if uhubctl isn't on PATH; callers should catch
+    Raises FileNotFoundError if the uhubctl executable can't be found (not on
+    PATH, or UHUBCTL_BIN points at a missing path); callers should catch
     that and surface it as "no controllable printer". See
     find_or_recall_printer_port for the cache-aware variant the API uses.
     """
