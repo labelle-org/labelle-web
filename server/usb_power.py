@@ -172,6 +172,13 @@ def _load_state(path: Path | None = None) -> tuple[str, int] | None:
     port = data.get("port")
     if isinstance(hub, str) and isinstance(port, int):
         return hub, port
+    # Quiet on the normal "no saved port yet" case, but warn if the keys
+    # are present with the wrong types — that's a corrupt state file worth
+    # surfacing (state_store.read_all only logs missing/corrupt-JSON files).
+    if hub is not None or port is not None:
+        logger.warning(
+            "Ignoring saved printer port: unexpected shape hub=%r port=%r", hub, port
+        )
     return None
 
 

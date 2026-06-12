@@ -205,6 +205,22 @@ class TestStatePersistence:
         p.write_text('{"hub": "1-1", "port": "3"}')
         assert usb_power._load_state(p) is None
 
+    def test_load_state_warns_on_invalid_shape(self, tmp_path, caplog):
+        p = tmp_path / "state.json"
+        p.write_text('{"hub": "1-1", "port": "3"}')
+        with caplog.at_level("WARNING"):
+            assert usb_power._load_state(p) is None
+        assert any("unexpected shape" in r.message for r in caplog.records)
+
+    def test_load_state_quiet_when_no_saved_port(self, tmp_path, caplog):
+        # A file with other features' keys but no hub/port is the normal
+        # case — must not warn.
+        p = tmp_path / "state.json"
+        p.write_text('{"printers": {"a": {"tapeSizeMm": 12}}}')
+        with caplog.at_level("WARNING"):
+            assert usb_power._load_state(p) is None
+        assert not any("unexpected shape" in r.message for r in caplog.records)
+
     def test_save_state_writes_round_trippable_json(self, tmp_path):
         p = tmp_path / "state.json"
         usb_power._save_state("2-4", 7, p)
