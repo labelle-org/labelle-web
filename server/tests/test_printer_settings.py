@@ -7,6 +7,7 @@ subset, keyed by printer id, in the shared state file. See issue #20.
 import pytest
 
 import printer_settings
+import state_store
 import usb_power
 
 
@@ -34,6 +35,21 @@ class TestGet:
         printer_settings.save_settings("b", {"tapeSizeMm": 19}, p)
         assert printer_settings.get_settings("a", p) == {"tapeSizeMm": 6}
         assert printer_settings.get_settings("b", p) == {"tapeSizeMm": 19}
+
+
+class TestCorruptState:
+    """A hand-edited or corrupt state file must not crash get/save."""
+
+    def test_get_returns_empty_when_printers_is_not_a_dict(self, tmp_path):
+        p = tmp_path / "state.json"
+        state_store.update(lambda d: d.__setitem__("printers", []), p)
+        assert printer_settings.get_settings("a", p) == {}
+
+    def test_save_replaces_non_dict_printers(self, tmp_path):
+        p = tmp_path / "state.json"
+        state_store.update(lambda d: d.__setitem__("printers", "garbage"), p)
+        printer_settings.save_settings("a", {"tapeSizeMm": 12}, p)
+        assert printer_settings.get_settings("a", p) == {"tapeSizeMm": 12}
 
 
 class TestSaveValidation:

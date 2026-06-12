@@ -46,7 +46,9 @@ def _validate(settings: dict) -> None:
 
 def get_settings(printer_id: str, path=None) -> dict:
     """Return the saved subset for a printer, or {} if none saved."""
-    printers = state_store.read_all(path).get(_PRINTERS_KEY, {})
+    printers = state_store.read_all(path).get(_PRINTERS_KEY)
+    if not isinstance(printers, dict):
+        return {}
     entry = printers.get(printer_id)
     return entry if isinstance(entry, dict) else {}
 
@@ -60,8 +62,13 @@ def save_settings(printer_id: str, settings: dict, path=None) -> dict:
     if not printer_id:
         raise ValueError("printer_id must be non-empty")
     _validate(settings)
-    state_store.update(
-        lambda d: d.setdefault(_PRINTERS_KEY, {}).__setitem__(printer_id, settings),
-        path,
-    )
+
+    def mutate(d: dict) -> None:
+        # A corrupt/hand-edited file may carry a non-dict "printers"; replace
+        # it rather than letting __setitem__ raise and fail the write.
+        if not isinstance(d.get(_PRINTERS_KEY), dict):
+            d[_PRINTERS_KEY] = {}
+        d[_PRINTERS_KEY][printer_id] = settings
+
+    state_store.update(mutate, path)
     return settings
