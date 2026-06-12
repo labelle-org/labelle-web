@@ -61,6 +61,31 @@ class TestModuleListSync:
         )
 
 
+class TestStateFileOwnership:
+    """state_store.py is the single owner of the on-disk state file."""
+
+    def test_only_state_store_references_the_state_file(self):
+        """Every other feature must persist via state_store.read_all/update
+        so writes stay atomic and non-clobbering. Reaching for
+        LABELLE_STATE_FILE elsewhere is how the pre-refactor usb_power saver
+        introduced full-file overwrites — guard against reintroducing it.
+
+        Catches the realistic regression (a new feature grabbing the env
+        var); a hand-hardcoded path would slip through, which is an
+        acceptable trade for a zero-false-positive check.
+        """
+        server_dir = Path(__file__).resolve().parent.parent
+        offenders = [
+            f.name
+            for f in server_dir.glob("*.py")
+            if f.name != "state_store.py" and "LABELLE_STATE_FILE" in f.read_text()
+        ]
+        assert not offenders, (
+            f"{offenders} reference LABELLE_STATE_FILE directly; "
+            "go through state_store.read_all/update instead."
+        )
+
+
 class TestFlaskApp:
     """The Flask app must create and register expected routes."""
 
@@ -76,6 +101,7 @@ class TestFlaskApp:
             "/api/print",
             "/api/preview",
             "/api/printers",
+            "/api/printers/<path:printer_id>/settings",
             "/api/upload-image",
             "/api/uploads/<filename>",
             "/api/health",
