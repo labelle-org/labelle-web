@@ -2,7 +2,7 @@
 
 Several features persist a little long-lived state across container
 restarts — the USB power feature caches the printer's (hub, port), and
-per-printer label settings live here too (issue #20). They all share one
+per-printer label settings live here too. They all share one
 file so the standard deployment needs only the single `/app/output`
 volume that's already mounted.
 
@@ -69,8 +69,11 @@ def update(mutator: Callable[[dict], None], path: Path | None = None) -> dict:
     """Atomically read-modify-write the state file under the shared lock.
 
     `mutator` receives the full document and edits it in place. Returns
-    the resulting document. Write failures are swallowed (best-effort);
-    the in-memory result is still returned so callers see their change.
+    the resulting document. Failures are swallowed (best-effort) — both
+    I/O errors and JSON serialization errors (a non-serializable value
+    written by a feature) — so persisting state never crashes the caller's
+    actual operation. The in-memory result is still returned so callers
+    see their change even when the write didn't land.
     """
     if path is None:
         path = STATE_FILE
@@ -82,6 +85,6 @@ def update(mutator: Callable[[dict], None], path: Path | None = None) -> dict:
             tmp = path.with_suffix(path.suffix + ".tmp")
             tmp.write_text(json.dumps(data))
             tmp.replace(path)
-        except OSError as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.warning("Could not write state file %s: %s", path, e)
         return data

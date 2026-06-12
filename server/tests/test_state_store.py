@@ -69,6 +69,14 @@ class TestUpdate:
         bad_path = blocker / "state.json"
         state_store.update(lambda d: d.update(hub="1-1", port=3), bad_path)
 
+    def test_swallows_serialization_errors(self, tmp_path):
+        # A non-JSON-serializable value must not crash the caller, and must
+        # leave any prior on-disk state intact (the bad write never lands).
+        p = tmp_path / "state.json"
+        state_store.update(lambda d: d.update(hub="1-1", port=3), p)
+        state_store.update(lambda d: d.update(bad={1, 2, 3}), p)  # set → TypeError
+        assert state_store.read_all(p) == {"hub": "1-1", "port": 3}
+
     def test_returns_resulting_data(self, tmp_path):
         p = tmp_path / "state.json"
         result = state_store.update(lambda d: d.update(hub="1-1", port=3), p)
