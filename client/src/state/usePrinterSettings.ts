@@ -45,7 +45,11 @@ export function usePrinterSettings(): {
 
   const persist = (patch: PersistedPrinterSettings) => {
     if (!printerId) return;
-    savePrinterSettings(printerId, { ...pickPersisted(settings), ...patch }).catch(
+    // Read the live store rather than the `settings` captured in this render:
+    // consecutive user edits can fire before a re-render, and the full subset
+    // we send must reflect the latest values, not stale ones.
+    const current = useLabelStore.getState().settings;
+    savePrinterSettings(printerId, { ...pickPersisted(current), ...patch }).catch(
       (error) => {
         console.error("Failed to save printer settings:", error);
       },
