@@ -107,3 +107,11 @@ export interface LabelSettings {
   cutMark: boolean;
   printerId?: string; // Optional printer ID for multi-printer setups
 }
+
+// The subset of LabelSettings persisted per printer (issue #20): the
+// physical "what tape/colors are loaded" properties. Partial because a
+// printer may only have some of them saved. Kept narrow on purpose —
+// margins/justify/cutMark are label preferences, not printer state.
+export type PersistedPrinterSettings = Partial<
+  Pick<LabelSettings, "tapeSizeMm" | "foregroundColor" | "backgroundColor">
+>;

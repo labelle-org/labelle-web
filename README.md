@@ -28,6 +28,7 @@ You can fight against AI usage or learn to embrace it as a new way of working. I
 - **Label settings** -- tape size, margins, minimum length, justify, foreground/background colors
 - **Per-widget font styles** -- each text widget can have its own font style, scale, frame, and alignment
 - **Multi-printer support** -- automatically detects all connected DYMO printers; select specific printer when multiple are available
+- **Per-printer settings** -- the tape size and colors loaded in each printer are remembered across visits, so you don't re-pick them every time (handy for kiosk / shared-tablet setups)
 - **Virtual printers** -- configure virtual printers that save labels as PNG images, JSON data, or both (great for testing, archiving, and development)
 - **Batch print** -- print multiple labels with variable content using `{{varname}}` placeholders, with a table to fill in values per row, configurable copies and pause time, SSE progress streaming, and cancellation support
 - **Cut mark** -- optional dotted column painted into the trailing margin between batch labels so you can tear/cut between them; uses the existing inter-label gap, no extra tape

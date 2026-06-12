@@ -7,6 +7,8 @@ import {
   printLabel,
   fetchServerPreview,
   uploadImage,
+  fetchPrinterSettings,
+  savePrinterSettings,
 } from "./api";
 import type { LabelWidget, LabelSettings } from "../types/label";
 
@@ -253,5 +255,66 @@ describe("uploadImage", () => {
 
     const file = new File(["fake"], "test.png", { type: "image/png" });
     await expect(uploadImage(file)).rejects.toThrow("No file provided");
+  });
+});
+
+describe("fetchPrinterSettings", () => {
+  it("GETs the URL-encoded printer id and returns the settings", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ settings: { tapeSizeMm: 19 } }),
+    });
+
+    const result = await fetchPrinterSettings("Bus 001 Device 005: ID 0922:1234");
+
+    expect(result).toEqual({ tapeSizeMm: 19 });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/printers/Bus%20001%20Device%20005%3A%20ID%200922%3A1234/settings",
+    );
+  });
+
+  it("returns {} when the server reports no saved settings", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ settings: {} }),
+    });
+    expect(await fetchPrinterSettings("usb:1")).toEqual({});
+  });
+
+  it("throws on a non-ok response", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false });
+    await expect(fetchPrinterSettings("usb:1")).rejects.toThrow();
+  });
+});
+
+describe("savePrinterSettings", () => {
+  it("PUTs the settings as JSON to the encoded id", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+
+    await savePrinterSettings("virtual:Office", {
+      tapeSizeMm: 12,
+      foregroundColor: "black",
+      backgroundColor: "white",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/printers/virtual%3AOffice/settings",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tapeSizeMm: 12,
+          foregroundColor: "black",
+          backgroundColor: "white",
+        }),
+      },
+    );
+  });
+
+  it("throws on a non-ok response", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false });
+    await expect(
+      savePrinterSettings("usb:1", { tapeSizeMm: 12 }),
+    ).rejects.toThrow();
   });
 });

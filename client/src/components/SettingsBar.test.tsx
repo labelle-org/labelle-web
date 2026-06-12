@@ -15,9 +15,13 @@ vi.mock("../lib/api", () => ({
   }),
   powerOn: vi.fn(),
   powerOff: vi.fn(),
+  // usePrinterSettings (issue #20) runs inside SettingsBar.
+  fetchPrinterSettings: vi.fn().mockResolvedValue({}),
+  savePrinterSettings: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { SettingsBar } from "./SettingsBar";
+import { fetchPrinterSettings, savePrinterSettings } from "../lib/api";
 import { useLabelStore } from "../state/useLabelStore";
 import type { PrinterInfo } from "../types/label";
 
@@ -31,6 +35,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   // Reset store to defaults
   useLabelStore.setState({
     availablePrinters: [],
@@ -121,6 +126,68 @@ describe("SettingsBar printer selector", () => {
     await userEvent.selectOptions(select, "");
 
     expect(useLabelStore.getState().settings.printerId).toBeUndefined();
+  });
+});
+
+describe("SettingsBar per-printer settings persistence (issue #20)", () => {
+  it("applies saved settings when a printer is selected", async () => {
+    vi.mocked(fetchPrinterSettings).mockResolvedValueOnce({ tapeSizeMm: 6 });
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: "usb:1" },
+    });
+    render(<SettingsBar />);
+
+    await waitFor(() => {
+      expect(useLabelStore.getState().settings.tapeSizeMm).toBe(6);
+    });
+    expect(fetchPrinterSettings).toHaveBeenCalledWith("usb:1");
+  });
+
+  it("persists the full subset when the tape size changes", async () => {
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: "usb:1" },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    const tapeSelect = screen.getByDisplayValue("12");
+    await userEvent.selectOptions(tapeSelect, "19");
+
+    expect(savePrinterSettings).toHaveBeenCalledWith("usb:1", {
+      tapeSizeMm: 19,
+      foregroundColor: "black",
+      backgroundColor: "white",
+    });
+  });
+
+  it("uses the single connected printer even on Auto-select", async () => {
+    useLabelStore.setState({
+      availablePrinters: [twoPrinters[0]!],
+      settings: { ...useLabelStore.getState().settings, printerId: undefined },
+    });
+    render(<SettingsBar />);
+
+    await waitFor(() => {
+      expect(fetchPrinterSettings).toHaveBeenCalledWith("usb:1");
+    });
+  });
+
+  it("does not persist on Auto-select with multiple printers", async () => {
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: undefined },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    const tapeSelect = screen.getByDisplayValue("12");
+    await userEvent.selectOptions(tapeSelect, "19");
+
+    expect(savePrinterSettings).not.toHaveBeenCalled();
+    // Ambiguous which printer the server picks, so we don't read either.
+    expect(fetchPrinterSettings).not.toHaveBeenCalled();
   });
 });
 

@@ -498,3 +498,64 @@ class TestApiPrintErrors:
 
         assert resp.status_code == 500
         assert "Printer on fire" in resp.get_json()["message"]
+
+
+class TestPrinterSettingsEndpoints:
+    """GET/PUT /api/printers/<id>/settings — per-printer settings (issue #20)."""
+
+    @pytest.fixture
+    def state_file(self, tmp_path, monkeypatch):
+        import state_store
+
+        path = tmp_path / "state.json"
+        monkeypatch.setattr(state_store, "STATE_FILE", path)
+        return path
+
+    def test_get_returns_empty_when_unsaved(self, client, state_file):
+        resp = client.get("/api/printers/virtual:Test_Printer/settings")
+        assert resp.status_code == 200
+        assert resp.get_json() == {"settings": {}}
+
+    def test_put_then_get_round_trips(self, client, state_file):
+        body = {"tapeSizeMm": 19, "foregroundColor": "white", "backgroundColor": "blue"}
+        put = client.put(
+            "/api/printers/virtual:Test_Printer/settings",
+            data=json.dumps(body),
+            content_type="application/json",
+        )
+        assert put.status_code == 200
+        assert put.get_json()["settings"] == body
+
+        got = client.get("/api/printers/virtual:Test_Printer/settings")
+        assert got.get_json() == {"settings": body}
+
+    def test_put_invalid_value_returns_400(self, client, state_file):
+        resp = client.put(
+            "/api/printers/virtual:Test_Printer/settings",
+            data=json.dumps({"tapeSizeMm": 13}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert resp.get_json()["status"] == "error"
+
+    def test_put_unknown_key_returns_400(self, client, state_file):
+        resp = client.put(
+            "/api/printers/virtual:Test_Printer/settings",
+            data=json.dumps({"marginPx": 10}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_ids_with_spaces_and_colons_round_trip(self, client, state_file):
+        # Real USB ids look like "Bus 001 Device 005: ID 0922:1234".
+        from urllib.parse import quote
+
+        printer_id = "Bus 001 Device 005: ID 0922:1234"
+        encoded = quote(printer_id, safe="")
+        client.put(
+            f"/api/printers/{encoded}/settings",
+            data=json.dumps({"tapeSizeMm": 6}),
+            content_type="application/json",
+        )
+        got = client.get(f"/api/printers/{encoded}/settings")
+        assert got.get_json() == {"settings": {"tapeSizeMm": 6}}

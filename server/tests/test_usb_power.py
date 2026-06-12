@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+import state_store
 import usb_power
 
 
@@ -226,21 +227,21 @@ class TestStatePersistence:
         self, mock_run, tmp_path, monkeypatch
     ):
         state_file = tmp_path / "state.json"
-        monkeypatch.setattr(usb_power, "_STATE_FILE", state_file)
+        monkeypatch.setattr(state_store, "STATE_FILE", state_file)
         usb_power._last_known_port = None
 
         mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
         usb_power.find_or_recall_printer_port()
 
         # Read it back through `_load_state()` with no arg so it
-        # resolves the same monkeypatched `_STATE_FILE`.
+        # resolves the same monkeypatched default state file.
         assert usb_power._load_state() == ("1-1", 3)
 
     def test_find_or_recall_does_not_rewrite_unchanged_value(
         self, mock_run, tmp_path, monkeypatch
     ):
         state_file = tmp_path / "state.json"
-        monkeypatch.setattr(usb_power, "_STATE_FILE", state_file)
+        monkeypatch.setattr(state_store, "STATE_FILE", state_file)
         usb_power._last_known_port = ("1-1", 3)
 
         mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)

@@ -141,6 +141,27 @@ The backend supports two types of printers:
 
 **Output Filename Format (virtual printers):** `label_YYYYMMDD_HHMMSS_uuid.png`
 
+### Persistent State (`state_store.py`)
+
+A single JSON file (`LABELLE_STATE_FILE`, default `/app/output/.labelle/state.json`,
+inside the already-mounted output volume) holds the small bits of state that
+must survive container restarts. `state_store.py` owns it and is the only writer:
+every write is an atomic read-modify-write of the whole document under a shared
+lock, so independent features can each persist their slice without clobbering
+the others.
+
+Current slices:
+- **USB power** (`usb_power.py`): top-level `hub`/`port` — the last known
+  controllable port, so power-on still works after the device has been powered
+  off and dropped off the USB tree.
+- **Per-printer settings** (`printer_settings.py`): a `printers` map keyed by
+  `PrinterInfo.id`, storing the long-lived tape size + foreground/background
+  colors loaded in each printer (issue #20). Validated server-side; the client
+  applies a printer's saved subset on selection and writes back on change. The
+  "effective printer" is the explicit selection, or the sole printer when on
+  Auto-select — so single-printer kiosks persist too. v2 follow-ups (aliases,
+  presets, remember-last) are expected to extend this same per-printer map.
+
 ### Request Flow
 
 ```
@@ -343,10 +364,12 @@ Uncomment the output volume mount in `compose.yaml` to access saved labels on th
 TODOs documented in code comments:
 
 **Backend (app.py, label_builder.py):**
-- Per-printer settings persistence (tape size, margins, color)
 - Printer status/health checks (online/offline, tape level)
 - Printer list caching to reduce USB scans
 - Printer capability detection (supported tape sizes, colors)
+
+(Per-printer tape-size/color persistence shipped in v1.8.0 — see "Per-printer
+settings" below. The remaining three are tracked in issue #38.)
 
 **Frontend (SettingsBar.tsx):**
 - Printer status indicators in UI

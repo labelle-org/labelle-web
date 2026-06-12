@@ -3,6 +3,7 @@ import type {
   LabelSettings,
   PrinterInfo,
   PowerStatus,
+  PersistedPrinterSettings,
 } from "../types/label";
 
 interface PrintResponse {
@@ -188,4 +189,33 @@ export async function powerOn(): Promise<PowerStatus> {
 export async function powerOff(): Promise<PowerStatus> {
   const res = await fetch("/api/power/off", { method: "POST" });
   return _readPowerResponse(res);
+}
+
+// Per-printer label settings (issue #20): the long-lived "what tape/colors
+// are loaded" subset, persisted server-side keyed by printer id. Printer
+// ids contain spaces and colons, so encode the whole segment.
+export async function fetchPrinterSettings(
+  printerId: string,
+): Promise<PersistedPrinterSettings> {
+  const res = await fetch(
+    `/api/printers/${encodeURIComponent(printerId)}/settings`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch printer settings");
+  const data = (await res.json()) as { settings?: PersistedPrinterSettings };
+  return data.settings ?? {};
+}
+
+export async function savePrinterSettings(
+  printerId: string,
+  settings: PersistedPrinterSettings,
+): Promise<void> {
+  const res = await fetch(
+    `/api/printers/${encodeURIComponent(printerId)}/settings`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to save printer settings");
 }
