@@ -51,6 +51,20 @@ class TestCorruptState:
         printer_settings.save_settings("a", {"tapeSizeMm": 12}, p)
         assert printer_settings.get_settings("a", p) == {"tapeSizeMm": 12}
 
+    def test_get_sanitizes_unknown_keys_and_invalid_values(self, tmp_path):
+        """A hand-edited entry must not serve junk back to the client."""
+        p = tmp_path / "state.json"
+        state_store.update(
+            lambda d: d.__setitem__(
+                "printers",
+                {"a": {"tapeSizeMm": 999, "foregroundColor": "red", "evil": "x"}},
+            ),
+            p,
+        )
+        # tapeSizeMm 999 (out of range) and the unknown key are dropped;
+        # the valid foregroundColor survives.
+        assert printer_settings.get_settings("a", p) == {"foregroundColor": "red"}
+
 
 class TestSaveValidation:
     def test_rejects_unknown_key(self, tmp_path):

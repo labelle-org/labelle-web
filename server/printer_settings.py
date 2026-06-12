@@ -26,7 +26,15 @@ import state_store
 _VALID_TAPE_SIZES = {6, 9, 12, 19}
 _VALID_COLORS = {"white", "black", "yellow", "blue", "red", "green"}
 
-_PERSISTED_KEYS = ("tapeSizeMm", "foregroundColor", "backgroundColor")
+# Allowed values per persisted key. Single source of truth for both
+# _validate (raise on write) and _sanitize (drop on read).
+_ALLOWED_VALUES = {
+    "tapeSizeMm": _VALID_TAPE_SIZES,
+    "foregroundColor": _VALID_COLORS,
+    "backgroundColor": _VALID_COLORS,
+}
+
+_PERSISTED_KEYS = tuple(_ALLOWED_VALUES)
 
 _PRINTERS_KEY = "printers"
 
@@ -37,20 +45,36 @@ def _validate(settings: dict) -> None:
     unknown = set(settings) - set(_PERSISTED_KEYS)
     if unknown:
         raise ValueError(f"Unknown printer setting(s): {sorted(unknown)}")
-    if "tapeSizeMm" in settings and settings["tapeSizeMm"] not in _VALID_TAPE_SIZES:
-        raise ValueError(f"Invalid tapeSizeMm: {settings['tapeSizeMm']!r}")
-    for key in ("foregroundColor", "backgroundColor"):
-        if key in settings and settings[key] not in _VALID_COLORS:
-            raise ValueError(f"Invalid {key}: {settings[key]!r}")
+    for key, value in settings.items():
+        if value not in _ALLOWED_VALUES[key]:
+            raise ValueError(f"Invalid {key}: {value!r}")
+
+
+def _sanitize(entry: dict) -> dict:
+    """Best-effort filter to known keys with allowed values; never raises.
+
+    Used on read so a hand-edited/corrupt state file can't serve unknown
+    keys or out-of-range values back to the client. The mirror of
+    _validate, which raises on the same conditions at write time.
+    """
+    return {
+        key: value
+        for key, value in entry.items()
+        if key in _ALLOWED_VALUES and value in _ALLOWED_VALUES[key]
+    }
 
 
 def get_settings(printer_id: str, path=None) -> dict:
-    """Return the saved subset for a printer, or {} if none saved."""
+    """Return the saved subset for a printer, or {} if none saved.
+
+    Sanitizes on read so a corrupt/hand-edited file yields only valid
+    values, consistent with the validation enforced at write time.
+    """
     printers = state_store.read_all(path).get(_PRINTERS_KEY)
     if not isinstance(printers, dict):
         return {}
     entry = printers.get(printer_id)
-    return entry if isinstance(entry, dict) else {}
+    return _sanitize(entry) if isinstance(entry, dict) else {}
 
 
 def save_settings(printer_id: str, settings: dict, path=None) -> dict:

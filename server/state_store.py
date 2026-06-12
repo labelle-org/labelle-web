@@ -53,7 +53,10 @@ def read_all(path: Path | None = None) -> dict:
         data = json.loads(path.read_text())
     except FileNotFoundError:
         return {}
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        # UnicodeDecodeError (non-UTF8 bytes) is a ValueError, not an
+        # OSError — catch it explicitly so a corrupt file is treated as
+        # empty rather than crashing the caller.
         logger.warning("Could not read state file %s: %s", path, e)
         return {}
     if isinstance(data, dict):

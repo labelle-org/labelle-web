@@ -31,6 +31,12 @@ class TestReadAll:
         p.write_text(json.dumps([1, 2, 3]))
         assert state_store.read_all(p) == {}
 
+    def test_returns_empty_dict_on_non_utf8_bytes(self, tmp_path):
+        # Non-UTF8 bytes raise UnicodeDecodeError (a ValueError, not OSError).
+        p = tmp_path / "state.json"
+        p.write_bytes(b"\xff\xfe\x00garbage")
+        assert state_store.read_all(p) == {}
+
 
 class TestUpdate:
     def test_persists_mutation(self, tmp_path):
