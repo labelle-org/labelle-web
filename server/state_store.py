@@ -43,8 +43,9 @@ def read_all(path: Path | None = None) -> dict:
     """Return the whole state document as a dict; {} if absent/corrupt.
 
     A missing file is the normal first-run state. A corrupt or
-    wrong-shaped file is logged once and treated as empty rather than
-    crashing callers — the worst case is that prior state is forgotten.
+    wrong-shaped file is logged and treated as empty rather than
+    crashing callers — the worst case is that prior state is forgotten
+    (and overwritten cleanly on the next write).
     """
     if path is None:
         path = STATE_FILE
