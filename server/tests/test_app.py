@@ -546,6 +546,23 @@ class TestPrinterSettingsEndpoints:
         )
         assert resp.status_code == 400
 
+    def test_put_non_json_body_returns_400_without_clearing(self, client, state_file):
+        # Seed a saved value, then send a malformed PUT.
+        client.put(
+            "/api/printers/virtual:Test_Printer/settings",
+            data=json.dumps({"tapeSizeMm": 19}),
+            content_type="application/json",
+        )
+        resp = client.put(
+            "/api/printers/virtual:Test_Printer/settings",
+            data="not json",
+            content_type="text/plain",
+        )
+        assert resp.status_code == 400
+        # The previously-saved value must survive — not be wiped to {}.
+        got = client.get("/api/printers/virtual:Test_Printer/settings")
+        assert got.get_json() == {"settings": {"tapeSizeMm": 19}}
+
     def test_ids_with_spaces_and_colons_round_trip(self, client, state_file):
         # Real USB ids look like "Bus 001 Device 005: ID 0922:1234".
         from urllib.parse import quote

@@ -221,7 +221,11 @@ def api_get_printer_settings(printer_id):
 
 @app.route("/api/printers/<path:printer_id>/settings", methods=["PUT"])
 def api_put_printer_settings(printer_id):
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        # Reject malformed/non-JSON bodies rather than letting them coerce to
+        # {} and silently wipe the printer's saved settings.
+        return jsonify(status="error", message="Request body must be a JSON object"), 400
     try:
         saved = printer_settings.save_settings(printer_id, body)
     except ValueError as e:
