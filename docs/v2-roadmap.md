@@ -4,7 +4,7 @@
 > in-progress draft of where v2 *might* go. Directional choices (especially the
 > template-first homepage thesis in Phase 2) are explicitly up for discussion
 > with labelle-org and other contributors before any code lands. Feedback and
-> redirection are welcome — open an issue or comment on [PR #30](https://github.com/szrudi/labelle-web/pull/30).
+> redirection are welcome — open an issue or comment on the umbrella issues below.
 
 ## Why v2
 
@@ -12,11 +12,9 @@ v1's UI is a competent web port of the original labelle desktop GUI. v2 is explo
 
 ### Relationship to upstream labelle
 
-[labelle-org/labelle](https://github.com/labelle-org/labelle) has discussed adopting an external project as an eventual official "labelle-web" ([#45](https://github.com/labelle-org/labelle/issues/45) and related issues). This repository (`szrudi/labelle-web`) shares that name accidentally — it was created and named before that upstream conversation was visible to us.
+This project now lives under [labelle-org](https://github.com/labelle-org) as `labelle-org/labelle-web`, the org's web frontend for [labelle](https://github.com/labelle-org/labelle) (transferred 2026-05-22; first release on the new namespace was v1.7.0). It ships today and has hardware in regular use — a Raspberry Pi appliance accessed primarily from a phone.
 
-The longer-term aspiration is for this project to be the one adopted into labelle as the official web frontend. It currently ships, has hardware in regular use (a Raspberry Pi appliance accessed primarily from a phone), and is further along than the candidates upstream references today. Engaging labelle-org for input before diving into v2 implementation is on the table.
-
-In the meantime the v2 brainstorm stays open. Mobile-first polish is the firmer direction; the template-first thesis is one possibility being evaluated, not a settled destination — labelle-org input on direction would be valuable before committing to the larger Phase 2 slices.
+Being inside the org doesn't make the v2 *direction* settled. Mobile-first polish (Phase 1) is the firmer commitment; the template-first thesis (Phase 2) is one possibility being evaluated, not a destination — input from labelle-org maintainers and other users would be valuable before committing to the larger Phase 2 slices, especially the 2.5 homepage flip.
 
 ## Sequence
 
@@ -24,9 +22,9 @@ In the meantime the v2 brainstorm stays open. Mobile-first polish is the firmer 
 
 Tracking lives in the `labelle-web v2` project; phase progress is tracked via these umbrella issues:
 
-- **Phase 0** — [#27](https://github.com/szrudi/labelle-web/issues/27): quick wins
-- **Phase 1** — [#28](https://github.com/szrudi/labelle-web/issues/28): mobile-first polish
-- **Phase 2** — [#29](https://github.com/szrudi/labelle-web/issues/29): template-first transition
+- **Phase 0** — [#27](https://github.com/labelle-org/labelle-web/issues/27): quick wins
+- **Phase 1** — [#28](https://github.com/labelle-org/labelle-web/issues/28): mobile-first polish
+- **Phase 2** — [#29](https://github.com/labelle-org/labelle-web/issues/29): template-first transition
 
 ---
 
