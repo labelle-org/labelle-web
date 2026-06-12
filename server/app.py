@@ -211,7 +211,7 @@ def api_printers():
     return jsonify(printers=list_printers())
 
 
-# Per-printer label settings (issue #20). Printer ids contain spaces and
+# Per-printer label settings. Printer ids contain spaces and
 # colons (e.g. "Bus 001 Device 005: ID 0922:1234", "virtual:Office"), so
 # the client URL-encodes them and we take the whole segment via <path:>.
 @app.route("/api/printers/<path:printer_id>/settings", methods=["GET"])

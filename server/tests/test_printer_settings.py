@@ -1,7 +1,7 @@
 """Tests for per-printer label settings persistence.
 
 Stores the long-lived "what tape/colors are loaded in this printer"
-subset, keyed by printer id, in the shared state file. See issue #20.
+subset, keyed by printer id, in the shared state file.
 """
 
 import pytest

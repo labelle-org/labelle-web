@@ -501,7 +501,7 @@ class TestApiPrintErrors:
 
 
 class TestPrinterSettingsEndpoints:
-    """GET/PUT /api/printers/<id>/settings — per-printer settings (issue #20)."""
+    """GET/PUT /api/printers/<id>/settings — per-printer settings."""
 
     @pytest.fixture
     def state_file(self, tmp_path, monkeypatch):

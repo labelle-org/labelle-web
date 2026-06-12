@@ -191,7 +191,7 @@ export async function powerOff(): Promise<PowerStatus> {
   return _readPowerResponse(res);
 }
 
-// Per-printer label settings (issue #20): the long-lived "what tape/colors
+// Per-printer label settings: the long-lived "what tape/colors
 // are loaded" subset, persisted server-side keyed by printer id. Printer
 // ids contain spaces and colons, so encode the whole segment.
 export async function fetchPrinterSettings(

@@ -13,7 +13,7 @@ export function SettingsBar() {
   const setAvailablePrinters = useLabelStore((s) => s.setAvailablePrinters);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Per-printer settings persistence (issue #20): applies saved tape/color
+  // Per-printer settings persistence: applies saved tape/color
   // for the selected printer, and `persist` saves user changes to those.
   const { persist } = usePrinterSettings();
 
@@ -30,7 +30,7 @@ export function SettingsBar() {
   };
 
   // Only show printer selector if multiple printers are detected.
-  // Tape size + colors now persist per printer (issue #20); the rest of
+  // Tape size + colors now persist per printer; the rest of
   // the multi-printer UI cluster (status indicators, capability-aware tape
   // display, aliases, presets) is tracked in #38.
   const showPrinterSelector = availablePrinters.length > 1;

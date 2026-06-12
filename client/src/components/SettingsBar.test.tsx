@@ -15,7 +15,7 @@ vi.mock("../lib/api", () => ({
   }),
   powerOn: vi.fn(),
   powerOff: vi.fn(),
-  // usePrinterSettings (issue #20) runs inside SettingsBar.
+  // usePrinterSettings runs inside SettingsBar.
   fetchPrinterSettings: vi.fn().mockResolvedValue({}),
   savePrinterSettings: vi.fn().mockResolvedValue(undefined),
 }));
@@ -129,7 +129,7 @@ describe("SettingsBar printer selector", () => {
   });
 });
 
-describe("SettingsBar per-printer settings persistence (issue #20)", () => {
+describe("SettingsBar per-printer settings persistence", () => {
   it("applies saved settings when a printer is selected", async () => {
     vi.mocked(fetchPrinterSettings).mockResolvedValueOnce({ tapeSizeMm: 6 });
     useLabelStore.setState({

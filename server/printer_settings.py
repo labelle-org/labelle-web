@@ -10,7 +10,7 @@ Keyed by `PrinterInfo.id`: the USB id string for real printers
 ones — both stable across reboots. State rides in the shared state file
 under a "printers" namespace alongside the USB power cache.
 
-Out of scope (see issue #20): batch row data (lives in the label JSON),
+Out of scope: batch row data (lives in the label JSON),
 and recovering settings for a disconnected printer (we just keep the
 entry and restore it when the printer reappears).
 
@@ -21,7 +21,7 @@ this same per-printer store — keep the shape easy to grow.
 import state_store
 
 # The subset we persist, with their allowed values. Deliberately the
-# "physical printer state" minimum from issue #20 — margin/justify/cutMark
+# "physical printer state" minimum — margin/justify/cutMark
 # are arguably label preferences and are left out until that's decided.
 _VALID_TAPE_SIZES = {6, 9, 12, 19}
 _VALID_COLORS = {"white", "black", "yellow", "blue", "red", "green"}

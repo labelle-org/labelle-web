@@ -156,7 +156,7 @@ Current slices:
   off and dropped off the USB tree.
 - **Per-printer settings** (`printer_settings.py`): a `printers` map keyed by
   `PrinterInfo.id`, storing the long-lived tape size + foreground/background
-  colors loaded in each printer (issue #20). Validated server-side; the client
+  colors loaded in each printer. Validated server-side; the client
   applies a printer's saved subset on selection and writes back on change. The
   "effective printer" is the explicit selection, or the sole printer when on
   Auto-select — so single-printer kiosks persist too. v2 follow-ups (aliases,

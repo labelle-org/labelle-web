@@ -8,7 +8,7 @@ import {
 import type { PersistedPrinterSettings } from "../types/label";
 
 /**
- * Wires per-printer settings persistence (issue #20) in two directions:
+ * Wires per-printer settings persistence in two directions:
  *
  * - **Apply on select:** whenever the effective printer changes, fetch its
  *   saved subset and apply it to the store.
