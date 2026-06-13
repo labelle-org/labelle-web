@@ -41,7 +41,7 @@ _PORT_LINE_RE = re.compile(r"\s+Port (\d+):\s+(\w+)(.*)")
 _uhubctl_missing_logged = False
 
 
-def _invalidate_libusb_cache() -> None:
+def invalidate_libusb_cache() -> None:
     """Drop pyusb's cached libusb context so the next scan re-enumerates.
 
     pyusb's `usb.backend.libusb1` caches a `_lib_object` at module level
@@ -106,6 +106,27 @@ def find_printer_port(vendor_product_id: str = DYMO_USB_ID) -> tuple[str, int] |
     return None
 
 
+def printer_attached(vendor_product_id: str = DYMO_USB_ID) -> bool:
+    """Best-effort: does uhubctl currently see the DYMO on a hub port?
+
+    Reads uhubctl's device listing, so it's independent of pyusb's libusb
+    context — it stays accurate even when that context has gone stale after a
+    device re-enumeration. Used as the gate for the stale-context recovery in
+    `printer_service.list_printers`: an empty libusb scan while this returns
+    True means the device is physically present but the cached context is
+    stale.
+
+    Best-effort by design: any failure (uhubctl missing or erroring) returns
+    False — "can't confirm". A False gate is the safe default; it means we
+    never re-create the libusb context on a hunch, so we can't accidentally
+    resume a hub and re-energize a deliberately powered-off port.
+    """
+    try:
+        return find_printer_port(vendor_product_id) is not None
+    except Exception:
+        return False
+
+
 def get_port_status(hub: str, port: int) -> dict:
     """Return {'powered': bool, 'connected': bool} for a specific hub port.
 
@@ -144,13 +165,13 @@ def power_on(hub: str, port: int) -> None:
     set_port_power(hub, port, on=True)
     # Device just (re-)appeared at a new bus address; drop libusb's
     # cached enumeration so the next scan sees the live state.
-    _invalidate_libusb_cache()
+    invalidate_libusb_cache()
 
 
 def power_off(hub: str, port: int) -> None:
     set_port_power(hub, port, on=False)
     # Deliberately NOT invalidating the libusb cache here — see
-    # `_invalidate_libusb_cache` docstring. A libusb re-init would
+    # `invalidate_libusb_cache` docstring. A libusb re-init would
     # trigger a hub auto-resume that re-energizes the port we just
     # turned off. Callers that need to read accurate USB topology
     # while a port is off should use uhubctl-based status (`/api/
