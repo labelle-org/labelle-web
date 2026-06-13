@@ -65,6 +65,18 @@ class TestCorruptState:
         # the valid foregroundColor survives.
         assert printer_settings.get_settings("a", p) == {"foregroundColor": "red"}
 
+    def test_get_drops_unhashable_value_without_crashing(self, tmp_path):
+        # A list value in a hand-edited file must be dropped on read, not
+        # crash the GET with TypeError from the set-membership check.
+        p = tmp_path / "state.json"
+        state_store.update(
+            lambda d: d.__setitem__(
+                "printers", {"a": {"tapeSizeMm": [12], "foregroundColor": "red"}}
+            ),
+            p,
+        )
+        assert printer_settings.get_settings("a", p) == {"foregroundColor": "red"}
+
 
 class TestSaveValidation:
     def test_rejects_unknown_key(self, tmp_path):
@@ -91,6 +103,19 @@ class TestSaveValidation:
         p = tmp_path / "state.json"
         with pytest.raises(ValueError):
             printer_settings.save_settings("a", ["tapeSizeMm"], p)
+
+    def test_rejects_unhashable_value_without_crashing(self, tmp_path):
+        # An unhashable value must raise ValueError (→ 400), not TypeError.
+        p = tmp_path / "state.json"
+        with pytest.raises(ValueError):
+            printer_settings.save_settings("a", {"tapeSizeMm": [12]}, p)
+
+    def test_rejects_non_string_or_overlong_printer_id(self, tmp_path):
+        p = tmp_path / "state.json"
+        with pytest.raises(ValueError):
+            printer_settings.save_settings(123, {"tapeSizeMm": 12}, p)
+        with pytest.raises(ValueError):
+            printer_settings.save_settings("x" * 257, {"tapeSizeMm": 12}, p)
 
     def test_partial_subset_is_allowed(self, tmp_path):
         """User may have only ever changed the tape size; persist just that."""

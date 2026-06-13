@@ -38,6 +38,21 @@ _PERSISTED_KEYS = tuple(_ALLOWED_VALUES)
 
 _PRINTERS_KEY = "printers"
 
+# Cap the persisted printer-id length. Real ids are short (a USB id string
+# or "serial:"/"virtual:" + name); this just stops an unauthenticated client
+# from bloating the shared state file with absurdly long keys.
+_MAX_PRINTER_ID_LEN = 256
+
+
+def _is_allowed(key: str, value) -> bool:
+    """Whether `value` is permitted for `key`. Unhashable values (a list or
+    dict from a malformed request / hand-edited file) are simply not allowed,
+    rather than raising TypeError from the set-membership check."""
+    try:
+        return value in _ALLOWED_VALUES[key]
+    except TypeError:
+        return False
+
 
 def _validate(settings: dict) -> None:
     if not isinstance(settings, dict):
@@ -46,7 +61,7 @@ def _validate(settings: dict) -> None:
     if unknown:
         raise ValueError(f"Unknown printer setting(s): {sorted(unknown)}")
     for key, value in settings.items():
-        if value not in _ALLOWED_VALUES[key]:
+        if not _is_allowed(key, value):
             raise ValueError(f"Invalid {key}: {value!r}")
 
 
@@ -60,7 +75,7 @@ def _sanitize(entry: dict) -> dict:
     return {
         key: value
         for key, value in entry.items()
-        if key in _ALLOWED_VALUES and value in _ALLOWED_VALUES[key]
+        if key in _ALLOWED_VALUES and _is_allowed(key, value)
     }
 
 
@@ -83,8 +98,10 @@ def save_settings(printer_id: str, settings: dict, path=None) -> dict:
     The write replaces that printer's entry wholesale (not a deep-merge);
     the client always sends the full current subset.
     """
-    if not printer_id:
-        raise ValueError("printer_id must be non-empty")
+    if not isinstance(printer_id, str) or not printer_id:
+        raise ValueError("printer_id must be a non-empty string")
+    if len(printer_id) > _MAX_PRINTER_ID_LEN:
+        raise ValueError(f"printer_id too long (max {_MAX_PRINTER_ID_LEN} chars)")
     _validate(settings)
 
     def mutate(d: dict) -> None:
