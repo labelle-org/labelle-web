@@ -8,7 +8,6 @@ support per-port power switching (ppps) — confirmed for the 2109:3431 USB
 2.0 hub on hector.
 """
 
-import json
 import logging
 import os
 import re
@@ -16,6 +15,8 @@ import subprocess
 from pathlib import Path
 
 import usb.backend.libusb1
+
+import state_store
 
 logger = logging.getLogger(__name__)
 
@@ -156,57 +157,39 @@ def power_off(hub: str, port: int) -> None:
     # power/status`) rather than libusb-based device enumeration.
 
 
-# Path where `_last_known_port` is persisted across container restarts.
-# Default lives inside the Docker output mount, which is already a
-# persistent volume in the standard deployment — avoids requiring a
-# new volume mount just for this state. Tests pass an explicit path.
-_STATE_FILE = Path(
-    os.environ.get("LABELLE_STATE_FILE", "/app/output/.labelle/state.json")
-)
+# The (hub, port) cache is persisted across container restarts as the
+# top-level "hub"/"port" keys of the shared state file. We go through
+# state_store (rather than writing the file directly) so that saving the
+# port doesn't clobber the per-printer settings that share the file —
+# state_store does a read-modify-write of the whole document under a
+# shared lock. See server/state_store.py and printer_settings.py.
 
 
 def _load_state(path: Path | None = None) -> tuple[str, int] | None:
     """Read a previously-saved (hub, port) from disk, or None if absent/invalid."""
-    if path is None:
-        path = _STATE_FILE
-    try:
-        data = json.loads(path.read_text())
-    except FileNotFoundError:
-        return None
-    except (OSError, json.JSONDecodeError) as e:
-        logger.warning("Could not load printer port state from %s: %s", path, e)
-        return None
+    data = state_store.read_all(path)
     hub = data.get("hub")
     port = data.get("port")
     if isinstance(hub, str) and isinstance(port, int):
         return hub, port
-    logger.warning(
-        "Ignoring printer port state from %s: unexpected shape %r", path, data
-    )
+    # Quiet on the normal "no saved port yet" case, but warn if the keys
+    # are present with the wrong types — a wrong hub/port shape that
+    # state_store.read_all doesn't surface (it logs unreadable/non-object
+    # files, but a valid object with bad hub/port types reads back fine).
+    if hub is not None or port is not None:
+        logger.warning(
+            "Ignoring saved printer port: unexpected shape hub=%r port=%r", hub, port
+        )
     return None
 
 
 def _save_state(hub: str, port: int, path: Path | None = None) -> None:
     """Persist (hub, port) so a container restart can recover the cache.
 
-    Best-effort: a write failure (read-only fs, missing volume mount,
-    permissions) only loses cross-restart memory, never breaks runtime.
-
-    Writes are atomic-on-POSIX: serialize to a sibling `.tmp` file
-    first, then `os.replace()` over the target. A process interrupted
-    mid-write (or another thread writing concurrently) leaves the
-    target either fully old or fully new, never a torn JSON that
-    `_load_state` would have to discard.
+    Best-effort and atomic — see state_store.update. Merges into the
+    shared document so sibling keys (e.g. per-printer settings) survive.
     """
-    if path is None:
-        path = _STATE_FILE
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps({"hub": hub, "port": port}))
-        tmp.replace(path)
-    except OSError as e:
-        logger.warning("Could not save printer port state to %s: %s", path, e)
+    state_store.update(lambda d: d.update(hub=hub, port=port), path)
 
 
 # Module-global, intentionally unlocked. waitress serves requests on

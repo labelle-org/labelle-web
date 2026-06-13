@@ -16,6 +16,7 @@ SERVER_MODULES = [
     "label_builder",
     "power_save",
     "printer_service",
+    "state_store",
     "usb_power",
     "virtual_printer",
 ]
@@ -56,6 +57,31 @@ class TestModuleListSync:
         assert not stale, (
             f"SERVER_MODULES lists modules that no longer exist: {stale}. "
             "Remove them from the list."
+        )
+
+
+class TestStateFileOwnership:
+    """state_store.py is the single owner of the on-disk state file."""
+
+    def test_only_state_store_references_the_state_file(self):
+        """Every other feature must persist via state_store.read_all/update
+        so writes stay atomic and non-clobbering. Reaching for
+        LABELLE_STATE_FILE elsewhere is how the pre-refactor usb_power saver
+        introduced full-file overwrites — guard against reintroducing it.
+
+        Catches the realistic regression (a new feature grabbing the env
+        var); a hand-hardcoded path would slip through, which is an
+        acceptable trade for a zero-false-positive check.
+        """
+        server_dir = Path(__file__).resolve().parent.parent
+        offenders = [
+            f.name
+            for f in server_dir.glob("*.py")
+            if f.name != "state_store.py" and "LABELLE_STATE_FILE" in f.read_text()
+        ]
+        assert not offenders, (
+            f"{offenders} reference LABELLE_STATE_FILE directly; "
+            "go through state_store.read_all/update instead."
         )
 
 
