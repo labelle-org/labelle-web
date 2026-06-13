@@ -37,14 +37,22 @@ export function SettingsBar() {
   // display, aliases, presets) is tracked in #38.
   const showPrinterSelector = availablePrinters.length > 1;
 
+  // The selection shown in the dropdown. Fall back to the first printer
+  // when the stored selection is missing or stale (e.g. transiently after
+  // importing a label with no printerId) so the controlled <select> always
+  // matches a rendered option rather than going blank with no value.
+  const effectivePrinterId =
+    settings.printerId &&
+    availablePrinters.some((p) => p.id === settings.printerId)
+      ? settings.printerId
+      : availablePrinters[0]?.id;
+
   // Hide the USB power toggle when a virtual printer is selected —
-  // virtual printers don't have a USB port to power off. When
-  // Auto-select is active or a real USB printer is selected, the
-  // toggle stays visible (and itself hides if the server can't
+  // virtual printers don't have a USB port to power off. For a real USB
+  // printer the toggle stays visible (and itself hides if the server can't
   // resolve a controllable port).
-  const selectedPrinter = settings.printerId
-    ? availablePrinters.find((p) => p.id === settings.printerId)
-    : null;
+  const selectedPrinter =
+    availablePrinters.find((p) => p.id === effectivePrinterId) ?? null;
   const selectedIsVirtual = selectedPrinter?.vendorProductId === "virtual";
 
   return (
@@ -58,12 +66,9 @@ export function SettingsBar() {
           <Field label="Printer">
             <select
               className="input w-48"
-              value={settings.printerId || ""}
-              onChange={(e) =>
-                update({ printerId: e.target.value || undefined })
-              }
+              value={effectivePrinterId ?? ""}
+              onChange={(e) => update({ printerId: e.target.value })}
             >
-              <option value="">Auto-select</option>
               {availablePrinters.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

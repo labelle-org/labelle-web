@@ -233,7 +233,25 @@ export const useLabelStore = create<LabelStore>((set) => ({
     set((s) => ({ settings: { ...s.settings, ...patch } })),
 
   setAvailablePrinters: (printers) =>
-    set({ availablePrinters: printers, availablePrintersLoaded: true }),
+    set((s) => {
+      // Default the selection to a concrete printer — the first in the list,
+      // which is the first real USB printer when one is present (virtual
+      // printers are listed after). This way a selected printer (and its
+      // saved tape/colors) is active on load instead of an "Auto-select"
+      // placeholder. Keep the current selection if it's still connected;
+      // otherwise fall back to the first printer (or undefined when none are
+      // connected). availablePrintersLoaded gates the per-printer settings
+      // load until this first fetch has settled.
+      const stillPresent =
+        s.settings.printerId != null &&
+        printers.some((p) => p.id === s.settings.printerId);
+      const printerId = stillPresent ? s.settings.printerId : printers[0]?.id;
+      return {
+        availablePrinters: printers,
+        availablePrintersLoaded: true,
+        settings: { ...s.settings, printerId },
+      };
+    }),
 
   updateBatch: (patch) =>
     set((s) => ({ batch: { ...s.batch, ...patch } })),

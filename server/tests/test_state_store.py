@@ -37,6 +37,14 @@ class TestReadAll:
         p.write_bytes(b"\xff\xfe\x00garbage")
         assert state_store.read_all(p) == {}
 
+    def test_non_ascii_value_round_trips_as_utf8(self, tmp_path):
+        # The file is written and read as UTF-8 explicitly (not the process
+        # locale), so non-ASCII values survive regardless of environment.
+        p = tmp_path / "state.json"
+        state_store.update(lambda d: d.update(printers={"virtual:Büro": {}}), p)
+        assert p.read_text(encoding="utf-8")  # readable as UTF-8
+        assert state_store.read_all(p)["printers"] == {"virtual:Büro": {}}
+
 
 class TestUpdate:
     def test_persists_mutation(self, tmp_path):

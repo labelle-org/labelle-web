@@ -140,6 +140,43 @@ describe("Printers", () => {
     useLabelStore.getState().setAvailablePrinters([]);
     expect(useLabelStore.getState().availablePrintersLoaded).toBe(true);
   });
+
+  it("defaults the selection to the first printer when none is chosen", () => {
+    useLabelStore.getState().setAvailablePrinters([
+      { id: "usb:1", name: "A", vendorProductId: "0922:1002" },
+      { id: "virtual:b", name: "B", vendorProductId: "virtual" },
+    ]);
+    expect(useLabelStore.getState().settings.printerId).toBe("usb:1");
+  });
+
+  it("keeps the current selection when it is still present", () => {
+    useLabelStore.setState({
+      settings: { ...useLabelStore.getState().settings, printerId: "virtual:b" },
+    });
+    useLabelStore.getState().setAvailablePrinters([
+      { id: "usb:1", name: "A", vendorProductId: "0922:1002" },
+      { id: "virtual:b", name: "B", vendorProductId: "virtual" },
+    ]);
+    expect(useLabelStore.getState().settings.printerId).toBe("virtual:b");
+  });
+
+  it("re-selects the first printer when the selected one vanishes", () => {
+    useLabelStore.setState({
+      settings: { ...useLabelStore.getState().settings, printerId: "virtual:b" },
+    });
+    useLabelStore.getState().setAvailablePrinters([
+      { id: "usb:1", name: "A", vendorProductId: "0922:1002" },
+    ]);
+    expect(useLabelStore.getState().settings.printerId).toBe("usb:1");
+  });
+
+  it("clears the selection when no printers are present", () => {
+    useLabelStore.setState({
+      settings: { ...useLabelStore.getState().settings, printerId: "usb:1" },
+    });
+    useLabelStore.getState().setAvailablePrinters([]);
+    expect(useLabelStore.getState().settings.printerId).toBeUndefined();
+  });
 });
 
 describe("Load", () => {

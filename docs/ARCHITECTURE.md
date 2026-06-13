@@ -65,10 +65,9 @@ When batch mode is active and a row is selected, `LabelPreview` substitutes vari
 
 The app fetches available printers on load via `GET /api/printers`. If multiple printers are detected, a dropdown selector appears in the Settings panel with:
 - List of all printers (real USB + virtual printers)
-- "Auto-select" option (default)
 - Refresh button to re-scan USB devices
 
-The selected `printerId` is stored in `settings` and sent with print requests.
+The selection defaults to the first printer in the list (the first real USB printer when one is present; virtual printers are listed after), set in `setAvailablePrinters` — which also re-selects the first printer if the previously-selected one is no longer connected. The selected `printerId` is stored in `settings` and sent with print requests. (The server still accepts no `printerId` and auto-selects the first available printer; the UI just always sends a concrete one.)
 
 ### Batch Print
 
