@@ -134,13 +134,13 @@ The backend supports two types of printers:
 
 #### Virtual Printers
 - Configured via `VIRTUAL_PRINTERS` environment variable
-- Identified by `virtual:{sanitized_name}` format (e.g. "virtual:Office_Printer")
+- Identified by `virtual:{id}` — an optional explicit `id` from config (stable, decoupled from the display name), else a path-safe slug of the name (e.g. "virtual:Office_Printer")
 - Save labels as PNG files to configured directories
 - Useful for testing, archiving, and development without hardware
 
 **Printer ID Format:**
 - Real printers: `serial:{serial_number}`, or the full USB bus/address ID string when the device reports no serial
-- Virtual printers: `virtual:{name}` where name has spaces/special chars replaced with underscores
+- Virtual printers: `virtual:{id}` — the optional config `id` (URL-safe `[A-Za-z0-9_-]`), else a path-safe slug of the name (non-word runs → `_`). Colliding ids are rejected at config load.
 
 **Output Filename Format (virtual printers):** `label_YYYYMMDD_HHMMSS_uuid.png`
 
@@ -334,6 +334,8 @@ export VIRTUAL_PRINTERS='[
   {"name":"Warehouse Printer","path":"./output/warehouse"}
 ]'
 ```
+
+Each entry takes `name` and `path`, plus optional `output` (`image` (default) / `json` / `both`) and an optional `id`. Set `id` (URL-safe `[A-Za-z0-9_-]`) to give a printer a stable identity decoupled from its display name — its saved per-printer settings then survive renaming the `name`. Without `id`, the id is slugged from the name; entries whose ids collide are skipped at load with a warning.
 
 In Docker, configure in `.env` (loaded via `env_file` in `compose.yaml`):
 ```bash
