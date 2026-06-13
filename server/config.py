@@ -52,6 +52,11 @@ def get_virtual_printers() -> list[dict]:
             if "name" not in printer or "path" not in printer:
                 LOG.warning(f"Virtual printer missing 'name' or 'path': {printer}")
                 continue
+            if not isinstance(printer["name"], str) or not isinstance(printer["path"], str):
+                # Skip rather than letting a non-string name/path crash id
+                # computation (re.sub) or directory creation downstream.
+                LOG.warning(f"Virtual printer 'name' and 'path' must be strings: {printer}")
+                continue
 
             output = printer.get("output", "image")
             if output not in VALID_OUTPUT_MODES:
