@@ -56,6 +56,20 @@ interface LabelStore {
   ) => void;
 }
 
+// Default label settings — single source of truth for the store's initial
+// state and for resetting per-printer-persisted fields when a selected
+// printer has no saved settings (so it doesn't inherit the previous one's).
+export const DEFAULT_SETTINGS: LabelSettings = {
+  tapeSizeMm: 12,
+  marginPx: DEFAULT_MARGIN_PX,
+  minLengthMm: 0,
+  justify: "center",
+  foregroundColor: "black",
+  backgroundColor: "white",
+  showMargins: false,
+  cutMark: false,
+};
+
 export const useLabelStore = create<LabelStore>((set) => ({
   widgets: [
     {
@@ -69,16 +83,7 @@ export const useLabelStore = create<LabelStore>((set) => ({
     } satisfies TextWidget,
   ],
 
-  settings: {
-    tapeSizeMm: 12,
-    marginPx: DEFAULT_MARGIN_PX,
-    minLengthMm: 0,
-    justify: "center",
-    foregroundColor: "black",
-    backgroundColor: "white",
-    showMargins: false,
-    cutMark: false,
-  },
+  settings: { ...DEFAULT_SETTINGS },
 
   availablePrinters: [],
   availablePrintersLoaded: false,

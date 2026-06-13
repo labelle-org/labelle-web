@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLabelStore } from "./useLabelStore";
+import { useLabelStore, DEFAULT_SETTINGS } from "./useLabelStore";
 import { fetchPrinterSettings, savePrinterSettings } from "../lib/api";
 import {
   effectivePrinterId,
@@ -47,7 +47,12 @@ export function usePrinterSettings(): {
     setSettingsLoading(true);
     fetchPrinterSettings(printerId)
       .then((saved) => {
-        if (!cancelled && Object.keys(saved).length > 0) updateSettings(saved);
+        // Always set the persisted fields: saved values where present, else
+        // defaults. A printer with no saved settings must reset to defaults,
+        // not inherit the previously-selected printer's tape/colors.
+        if (!cancelled) {
+          updateSettings({ ...pickPersisted(DEFAULT_SETTINGS), ...saved });
+        }
       })
       .catch((error) => {
         if (!cancelled) console.error("Failed to load printer settings:", error);

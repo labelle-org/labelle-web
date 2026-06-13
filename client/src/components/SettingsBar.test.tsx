@@ -146,6 +146,30 @@ describe("SettingsBar per-printer settings persistence", () => {
     expect(fetchPrinterSettings).toHaveBeenCalledWith("usb:1");
   });
 
+  it("resets persisted fields to defaults for an unconfigured printer", async () => {
+    // Regression: switching to a printer with no saved settings must reset
+    // tape/colors to defaults, not inherit the previous printer's values.
+    vi.mocked(fetchPrinterSettings).mockResolvedValueOnce({});
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: {
+        ...useLabelStore.getState().settings,
+        printerId: "usb:1",
+        tapeSizeMm: 19,
+        foregroundColor: "white",
+        backgroundColor: "blue",
+      },
+    });
+    render(<SettingsBar />);
+
+    await waitFor(() => {
+      const s = useLabelStore.getState().settings;
+      expect(s.tapeSizeMm).toBe(12);
+      expect(s.foregroundColor).toBe("black");
+      expect(s.backgroundColor).toBe("white");
+    });
+  });
+
   it("persists the full subset when the tape size changes", async () => {
     useLabelStore.setState({
       availablePrinters: twoPrinters,
