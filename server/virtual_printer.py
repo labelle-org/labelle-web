@@ -18,8 +18,9 @@ from PIL import Image
 LOG = logging.getLogger(__name__)
 
 # A virtual printer id suffix must be URL-safe: it travels in the
-# /api/printers/<path:printer_id>/settings route. See #42.
-_VIRTUAL_ID_CHARSET = re.compile(r"^[A-Za-z0-9_-]+$")
+# /api/printers/<path:printer_id>/settings route. Matched with fullmatch
+# (not $, which also matches before a trailing newline). See #42.
+_VIRTUAL_ID_CHARSET = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def slugify_printer_name(name: str) -> str:
@@ -46,8 +47,11 @@ def compute_virtual_id(name: str, explicit_id: str | None = None) -> str:
 
 
 def is_valid_virtual_id(value) -> bool:
-    """Whether an explicit config id is a non-empty URL-safe string."""
-    return isinstance(value, str) and bool(_VIRTUAL_ID_CHARSET.match(value))
+    """Whether an explicit config id is a non-empty URL-safe string.
+
+    fullmatch (not match) so a trailing newline can't sneak through — `$`
+    matches before a final `\\n`, `fullmatch` requires the whole string."""
+    return isinstance(value, str) and bool(_VIRTUAL_ID_CHARSET.fullmatch(value))
 
 
 class VirtualPrinter:

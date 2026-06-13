@@ -4,7 +4,21 @@ import os
 import pytest
 from PIL import Image
 
-from virtual_printer import VirtualPrinter
+from virtual_printer import VirtualPrinter, is_valid_virtual_id
+
+
+class TestIsValidVirtualId:
+    def test_accepts_url_safe(self):
+        assert is_valid_virtual_id("office_2-A")
+
+    def test_rejects_trailing_newline(self):
+        # `$` would match before the newline; fullmatch must not. (#42)
+        assert not is_valid_virtual_id("office\n")
+
+    def test_rejects_slash_and_empty_and_non_str(self):
+        assert not is_valid_virtual_id("a/b")
+        assert not is_valid_virtual_id("")
+        assert not is_valid_virtual_id(123)
 
 
 class TestVirtualPrinterId:
