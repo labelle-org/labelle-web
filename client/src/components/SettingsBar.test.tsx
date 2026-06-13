@@ -49,14 +49,13 @@ beforeEach(() => {
 
 describe("SettingsBar printer selector", () => {
   it("shows printer selector when multiple printers available", () => {
-    useLabelStore.setState({ availablePrinters: twoPrinters });
+    useLabelStore.getState().setAvailablePrinters(twoPrinters);
     render(<SettingsBar />);
 
     // Open the details
     screen.getByText("Settings").click();
 
     expect(screen.getByText("Printer")).toBeInTheDocument();
-    expect(screen.getByText("Auto-select")).toBeInTheDocument();
   });
 
   it("hides printer selector when 0 printers", () => {
@@ -77,50 +76,48 @@ describe("SettingsBar printer selector", () => {
     expect(screen.queryByText("Printer")).not.toBeInTheDocument();
   });
 
-  it("lists all printers plus Auto-select", () => {
-    useLabelStore.setState({ availablePrinters: twoPrinters });
+  it("lists all available printers (no Auto-select option)", () => {
+    useLabelStore.getState().setAvailablePrinters(twoPrinters);
     render(<SettingsBar />);
 
     screen.getByText("Settings").click();
 
-    const select = screen.getByDisplayValue("Auto-select");
+    // Defaults to the first printer; the "Auto-select" entry is gone.
+    const select = screen.getByDisplayValue("DYMO LabelWriter 450");
     const options = select.querySelectorAll("option");
+    expect(options).toHaveLength(2);
+    expect(options[0]!.textContent).toBe("DYMO LabelWriter 450");
+    expect(options[1]!.textContent).toBe("Office (Virtual)");
+  });
 
-    // Auto-select + 2 printers = 3 options
-    expect(options).toHaveLength(3);
-    expect(options[0]!.textContent).toBe("Auto-select");
-    expect(options[1]!.textContent).toBe("DYMO LabelWriter 450");
-    expect(options[2]!.textContent).toBe("Office (Virtual)");
+  it("defaults the selection to the first printer when the list loads", () => {
+    useLabelStore.getState().setAvailablePrinters(twoPrinters);
+    expect(useLabelStore.getState().settings.printerId).toBe("usb:1");
   });
 
   it("selecting a printer updates the store", async () => {
-    useLabelStore.setState({ availablePrinters: twoPrinters });
-    render(<SettingsBar />);
-
-    screen.getByText("Settings").click();
-
-    const select = screen.getByDisplayValue("Auto-select");
-    await userEvent.selectOptions(select, "virtual:Office");
-
-    expect(useLabelStore.getState().settings.printerId).toBe("virtual:Office");
-  });
-
-  it("selecting Auto-select clears printerId", async () => {
-    useLabelStore.setState({
-      availablePrinters: twoPrinters,
-      settings: {
-        ...useLabelStore.getState().settings,
-        printerId: "usb:1",
-      },
-    });
+    useLabelStore.getState().setAvailablePrinters(twoPrinters);
     render(<SettingsBar />);
 
     screen.getByText("Settings").click();
 
     const select = screen.getByDisplayValue("DYMO LabelWriter 450");
-    await userEvent.selectOptions(select, "");
+    await userEvent.selectOptions(select, "virtual:Office");
 
-    expect(useLabelStore.getState().settings.printerId).toBeUndefined();
+    expect(useLabelStore.getState().settings.printerId).toBe("virtual:Office");
+  });
+
+  it("shows the first printer when printerId is unset (no blank value)", () => {
+    // printerId undefined but multiple printers present (e.g. transiently
+    // after an import) — the select must display a real option, not blank.
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: undefined },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    expect(screen.getByDisplayValue("DYMO LabelWriter 450")).toBeInTheDocument();
   });
 });
 
@@ -138,7 +135,7 @@ describe("SettingsBar power toggle visibility", () => {
     });
   });
 
-  it("shows the power toggle on Auto-select (no printerId)", async () => {
+  it("shows the power toggle when no printer is resolved yet (no printerId)", async () => {
     useLabelStore.setState({
       availablePrinters: twoPrinters,
       settings: { ...useLabelStore.getState().settings, printerId: undefined },
