@@ -11,6 +11,7 @@ support per-port power switching (ppps) — confirmed for the 2109:3431 USB
 import logging
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -121,6 +122,13 @@ def printer_attached(vendor_product_id: str = DYMO_USB_ID) -> bool:
     never re-create the libusb context on a hunch, so we can't accidentally
     resume a hub and re-energize a deliberately powered-off port.
     """
+    # Short-circuit when uhubctl isn't installed: this read-path probe must
+    # stay quiet. Calling through to `_run` would emit the latched "uhubctl
+    # missing" WARNING aimed at the power-control paths, surfacing a
+    # power-feature warning on plain printer listing in setups that never use
+    # power features (e.g. virtual-printer-only dev).
+    if shutil.which(UHUBCTL_BIN) is None:
+        return False
     try:
         return find_printer_port(vendor_product_id) is not None
     except Exception:
