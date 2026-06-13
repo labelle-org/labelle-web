@@ -30,6 +30,10 @@ interface LabelStore {
   widgets: LabelWidget[];
   settings: LabelSettings;
   availablePrinters: PrinterInfo[];
+  // Whether the initial /api/printers fetch has settled. Distinguishes
+  // "not fetched yet" from "fetched, none found" so per-printer settings
+  // can hold edits until the effective printer's settings are known.
+  availablePrintersLoaded: boolean;
   batch: BatchState;
 
   addTextWidget: () => string;
@@ -77,6 +81,7 @@ export const useLabelStore = create<LabelStore>((set) => ({
   },
 
   availablePrinters: [],
+  availablePrintersLoaded: false,
 
   batch: defaultBatch(),
 
@@ -222,7 +227,8 @@ export const useLabelStore = create<LabelStore>((set) => ({
   updateSettings: (patch) =>
     set((s) => ({ settings: { ...s.settings, ...patch } })),
 
-  setAvailablePrinters: (printers) => set({ availablePrinters: printers }),
+  setAvailablePrinters: (printers) =>
+    set({ availablePrinters: printers, availablePrintersLoaded: true }),
 
   updateBatch: (patch) =>
     set((s) => ({ batch: { ...s.batch, ...patch } })),
@@ -262,5 +268,12 @@ export const useLabelStore = create<LabelStore>((set) => ({
     }),
 
   loadLabel: (widgets, settings, batch) =>
-    set({ widgets, settings, batch: batch ?? defaultBatch() }),
+    // Keep the currently-selected printer; a label file describes design
+    // content (tape/colors/widgets), not which printer you're on. Its
+    // printerId is stripped on export and ignored here regardless.
+    set((s) => ({
+      widgets,
+      settings: { ...settings, printerId: s.settings.printerId },
+      batch: batch ?? defaultBatch(),
+    })),
 }));

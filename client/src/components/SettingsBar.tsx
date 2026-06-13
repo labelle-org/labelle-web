@@ -13,9 +13,11 @@ export function SettingsBar() {
   const setAvailablePrinters = useLabelStore((s) => s.setAvailablePrinters);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Per-printer settings persistence: applies saved tape/color
-  // for the selected printer, and `persist` saves user changes to those.
-  const { persist } = usePrinterSettings();
+  // Per-printer settings persistence: applies saved tape/color for the
+  // selected printer, and `persist` saves user changes to those. `loading`
+  // is true until those settings resolve — we disable the persisted controls
+  // until then so a late-arriving fetch can't clobber an edit.
+  const { persist, loading: settingsLoading } = usePrinterSettings();
 
   const handleRefreshPrinters = async () => {
     setIsRefreshing(true);
@@ -81,10 +83,17 @@ export function SettingsBar() {
 
       {!selectedIsVirtual && <PowerToggle />}
 
+      {settingsLoading && (
+        <span className="text-xs text-gray-500 italic">
+          Loading printer settings…
+        </span>
+      )}
+
       <Field label="Tape (mm)">
         <select
           className="input w-20"
           value={settings.tapeSizeMm}
+          disabled={settingsLoading}
           onChange={(e) => {
             const tapeSizeMm = Number(e.target.value) as TapeSize;
             update({ tapeSizeMm });
@@ -137,6 +146,7 @@ export function SettingsBar() {
         <select
           className="input w-24"
           value={settings.foregroundColor}
+          disabled={settingsLoading}
           onChange={(e) => {
             const foregroundColor = e.target.value as LabelColor;
             update({ foregroundColor });
@@ -155,6 +165,7 @@ export function SettingsBar() {
         <select
           className="input w-24"
           value={settings.backgroundColor}
+          disabled={settingsLoading}
           onChange={(e) => {
             const backgroundColor = e.target.value as LabelColor;
             update({ backgroundColor });

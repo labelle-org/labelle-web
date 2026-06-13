@@ -21,7 +21,10 @@ export default function App() {
         setAvailablePrinters(printers);
       } catch (error) {
         console.error("Failed to load printers:", error);
-        // Silently fail - UI will work without printer list
+        // Mark the fetch as settled (with no printers) so the per-printer
+        // settings gate lifts — otherwise the persisted controls would stay
+        // disabled forever when /api/printers is unreachable.
+        setAvailablePrinters([]);
       }
     };
     loadPrinters();

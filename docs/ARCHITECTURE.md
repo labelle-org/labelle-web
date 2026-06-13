@@ -160,10 +160,19 @@ Current slices:
 - **Per-printer settings** (`printer_settings.py`): a `printers` map keyed by
   `PrinterInfo.id`, storing the long-lived tape size + foreground/background
   colors loaded in each printer. Validated server-side; the client
-  applies a printer's saved subset on selection and writes back on change. The
-  "effective printer" is the explicit selection, or the sole printer when on
-  Auto-select — so single-printer kiosks persist too. v2 follow-ups (aliases,
-  presets, remember-last) are expected to extend this same per-printer map.
+  applies a printer's saved subset on selection and writes back on change
+  (`usePrinterSettings`). The "effective printer" is the explicit selection,
+  or the sole printer when on Auto-select — so single-printer kiosks persist
+  too. v2 follow-ups (aliases, presets, remember-last) are expected to extend
+  this same per-printer map.
+
+  The persisted controls (tape/colors) are **disabled until the effective
+  printer's settings have resolved** — before the printer list loads and while
+  the fetch is in flight — so a late-arriving fetch can't revert an edit and
+  pre-load edits aren't lost; a fetch error unlocks them (keep defaults). And
+  `printerId` is **stripped from exported label files** (it's a local
+  serial/virtual id, not portable content); importing a label keeps the
+  printer you're currently on.
 
 ### Request Flow
 

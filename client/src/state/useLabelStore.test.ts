@@ -132,6 +132,14 @@ describe("Printers", () => {
     useLabelStore.getState().setAvailablePrinters(printers);
     expect(useLabelStore.getState().availablePrinters).toEqual(printers);
   });
+
+  it("setAvailablePrinters marks the list as loaded", () => {
+    // The per-printer settings gate keys off this; App also calls
+    // setAvailablePrinters([]) on fetch error so the gate still lifts.
+    useLabelStore.setState({ availablePrintersLoaded: false });
+    useLabelStore.getState().setAvailablePrinters([]);
+    expect(useLabelStore.getState().availablePrintersLoaded).toBe(true);
+  });
 });
 
 describe("Load", () => {
@@ -154,6 +162,30 @@ describe("Load", () => {
 
     expect(useLabelStore.getState().widgets).toEqual(widgets);
     expect(useLabelStore.getState().settings).toEqual(settings);
+  });
+
+  it("loadLabel keeps the current printer selection", () => {
+    // Importing a label loads its design content but must not reassign the
+    // printer you're on (its printerId is stripped on export anyway).
+    useLabelStore.setState({
+      settings: { ...useLabelStore.getState().settings, printerId: "serial:ME" },
+    });
+    const settings: LabelSettings = {
+      tapeSizeMm: 6,
+      marginPx: 20,
+      minLengthMm: 10,
+      justify: "left",
+      foregroundColor: "blue",
+      backgroundColor: "yellow",
+      showMargins: true,
+      cutMark: false,
+      printerId: "serial:OTHER",
+    };
+
+    useLabelStore.getState().loadLabel([], settings);
+
+    expect(useLabelStore.getState().settings.printerId).toBe("serial:ME");
+    expect(useLabelStore.getState().settings.tapeSizeMm).toBe(6);
   });
 });
 

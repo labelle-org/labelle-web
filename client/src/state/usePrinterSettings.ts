@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLabelStore } from "./useLabelStore";
 import { fetchPrinterSettings, savePrinterSettings } from "../lib/api";
 import {
@@ -18,30 +18,53 @@ import type { PersistedPrinterSettings } from "../types/label";
  *
  * Each save sends the whole subset (not just the changed field) so the
  * server's wholesale-per-printer write never drops a previously saved value.
+ *
+ * Returns `loading`: true from app start until the effective printer's
+ * settings have resolved (or there is no effective printer). Callers disable
+ * the persisted controls while it's true, which closes two races: a slow
+ * apply-fetch reverting a concurrent edit, and edits made before the printer
+ * list resolves being lost. On a fetch error it clears (graceful unlock —
+ * keep defaults, don't persist) so the UI never locks permanently.
  */
 export function usePrinterSettings(): {
   persist: (patch: PersistedPrinterSettings) => void;
+  loading: boolean;
 } {
   const settings = useLabelStore((s) => s.settings);
   const availablePrinters = useLabelStore((s) => s.availablePrinters);
+  const availablePrintersLoaded = useLabelStore((s) => s.availablePrintersLoaded);
   const updateSettings = useLabelStore((s) => s.updateSettings);
 
   const printerId = effectivePrinterId(settings.printerId, availablePrinters);
+  const [settingsLoading, setSettingsLoading] = useState(false);
 
   useEffect(() => {
-    if (!printerId) return;
+    if (!printerId) {
+      setSettingsLoading(false);
+      return;
+    }
     let cancelled = false;
+    setSettingsLoading(true);
     fetchPrinterSettings(printerId)
       .then((saved) => {
         if (!cancelled && Object.keys(saved).length > 0) updateSettings(saved);
       })
       .catch((error) => {
-        console.error("Failed to load printer settings:", error);
+        if (!cancelled) console.error("Failed to load printer settings:", error);
+      })
+      .finally(() => {
+        if (!cancelled) setSettingsLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [printerId, updateSettings]);
+
+  // Block edits to persisted fields until we know what they should be:
+  // before the printer list loads, and while the chosen printer's settings
+  // are being fetched.
+  const loading =
+    !availablePrintersLoaded || (printerId !== undefined && settingsLoading);
 
   const persist = (patch: PersistedPrinterSettings) => {
     if (!printerId) return;
@@ -56,5 +79,5 @@ export function usePrinterSettings(): {
     );
   };
 
-  return { persist };
+  return { persist, loading };
 }

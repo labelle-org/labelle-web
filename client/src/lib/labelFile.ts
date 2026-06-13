@@ -68,7 +68,14 @@ export async function exportLabel(
     }
   }
 
-  const data: LabelFile = { version: 2, settings, widgets: exportWidgets };
+  // Omit printerId: it's environment-specific (a USB serial / local virtual
+  // id), not portable label content, and would otherwise leak the local
+  // printer identity into shared files. JSON.stringify drops the undefined.
+  const data: LabelFile = {
+    version: 2,
+    settings: { ...settings, printerId: undefined },
+    widgets: exportWidgets,
+  };
 
   // Export the batch block whenever the user has touched anything in the
   // panel (rows with values, or non-default copies/pause). Batch mode is

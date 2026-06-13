@@ -36,9 +36,11 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Reset store to defaults
+  // Reset store to defaults. availablePrintersLoaded: true so the persisted
+  // controls aren't gated off in tests that don't exercise the loading gate.
   useLabelStore.setState({
     availablePrinters: [],
+    availablePrintersLoaded: true,
     settings: {
       tapeSizeMm: 12,
       marginPx: 56,
@@ -153,6 +155,8 @@ describe("SettingsBar per-printer settings persistence", () => {
     screen.getByText("Settings").click();
 
     const tapeSelect = screen.getByDisplayValue("12");
+    // The control is gated until the printer's settings resolve.
+    await waitFor(() => expect(tapeSelect).not.toBeDisabled());
     await userEvent.selectOptions(tapeSelect, "19");
 
     expect(savePrinterSettings).toHaveBeenCalledWith("usb:1", {
@@ -160,6 +164,47 @@ describe("SettingsBar per-printer settings persistence", () => {
       foregroundColor: "black",
       backgroundColor: "white",
     });
+  });
+
+  it("disables persisted controls until the printer list loads", () => {
+    useLabelStore.setState({ availablePrinters: [], availablePrintersLoaded: false });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+    expect(screen.getByDisplayValue("12")).toBeDisabled();
+  });
+
+  it("disables then re-enables persisted controls around the settings fetch", async () => {
+    // A never-resolving fetch keeps the control gated.
+    let resolve!: (v: Record<string, never>) => void;
+    vi.mocked(fetchPrinterSettings).mockReturnValueOnce(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: "usb:1" },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    const tapeSelect = screen.getByDisplayValue("12");
+    await waitFor(() => expect(tapeSelect).toBeDisabled());
+    resolve({});
+    await waitFor(() => expect(tapeSelect).not.toBeDisabled());
+  });
+
+  it("re-enables controls (graceful unlock) when the settings fetch errors", async () => {
+    vi.mocked(fetchPrinterSettings).mockRejectedValueOnce(new Error("Pi down"));
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: "usb:1" },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    const tapeSelect = screen.getByDisplayValue("12");
+    await waitFor(() => expect(tapeSelect).not.toBeDisabled());
   });
 
   it("uses the single connected printer even on Auto-select", async () => {
