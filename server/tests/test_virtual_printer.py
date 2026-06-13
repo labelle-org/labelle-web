@@ -24,25 +24,50 @@ class TestVirtualPrinterId:
         vp = VirtualPrinter("Printer", "/tmp/test")
         assert vp.id.startswith("virtual:")
 
-    def test_slashes_preserved(self):
+    def test_slashes_sanitized(self):
+        # Slashes would split the settings route path — must not survive. (#42)
         vp = VirtualPrinter("Floor/2", "/tmp/test")
-        assert vp.id == "virtual:Floor/2"
+        assert vp.id == "virtual:Floor_2"
 
-    def test_dots_preserved(self):
+    def test_dots_sanitized(self):
         vp = VirtualPrinter("v2.0 Printer", "/tmp/test")
-        assert vp.id == "virtual:v2.0_Printer"
+        assert vp.id == "virtual:v2_0_Printer"
 
-    def test_unicode_name(self):
+    def test_unicode_letters_preserved(self):
+        # Unicode letters are \w and %-encode fine in a URL path.
         vp = VirtualPrinter("Drucker Büro", "/tmp/test")
         assert vp.id == "virtual:Drucker_Büro"
 
-    def test_emoji_name(self):
+    def test_emoji_stripped(self):
         vp = VirtualPrinter("Printer 🖨️", "/tmp/test")
-        assert vp.id == "virtual:Printer_🖨️"
+        assert vp.id == "virtual:Printer"
 
-    def test_empty_name(self):
+    def test_empty_name_falls_back(self):
         vp = VirtualPrinter("", "/tmp/test")
-        assert vp.id == "virtual:"
+        assert vp.id == "virtual:printer"
+
+
+class TestVirtualPrinterExplicitId:
+    def test_explicit_id_overrides_name(self):
+        vp = VirtualPrinter("Office (2nd Floor)", "/tmp/test", printer_id="office")
+        assert vp.id == "virtual:office"
+
+    def test_explicit_id_is_decoupled_from_display_name(self):
+        # Renaming the display name must not change the id.
+        vp = VirtualPrinter("Renamed", "/tmp/test", printer_id="office")
+        assert vp.id == "virtual:office"
+        assert vp.display_name == "Renamed (Virtual)"
+
+    def test_from_config_honors_id_and_output(self):
+        vp = VirtualPrinter.from_config(
+            {"name": "X", "path": "/tmp/test", "output": "both", "id": "x1"}
+        )
+        assert vp.id == "virtual:x1"
+        assert vp.output_mode == "both"
+
+    def test_from_config_without_id_slugs_name(self):
+        vp = VirtualPrinter.from_config({"name": "Floor/2", "path": "/tmp/test"})
+        assert vp.id == "virtual:Floor_2"
 
 
 class TestVirtualPrinterDisplayName:

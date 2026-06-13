@@ -40,7 +40,7 @@ def _printer_id(dev) -> str:
 def _find_virtual_printer(printer_id: str) -> VirtualPrinter:
     """Resolve a virtual printer by its ID (e.g. 'virtual:Office_Printer')."""
     for config in get_virtual_printers():
-        vp = VirtualPrinter(config["name"], config["path"], output_mode=config.get("output", "image"))
+        vp = VirtualPrinter.from_config(config)
         if vp.id == printer_id:
             return vp
     raise ValueError(f"Virtual printer not found: {printer_id}")
@@ -52,8 +52,7 @@ def _fallback_to_virtual(widgets: list[dict], settings: dict, upload_dir: str) -
     if not virtual_printers_config:
         raise ValueError("No printers available (no USB printers found and no virtual printers configured)")
 
-    config = virtual_printers_config[0]
-    vp = VirtualPrinter(config["name"], config["path"], output_mode=config.get("output", "image"))
+    vp = VirtualPrinter.from_config(virtual_printers_config[0])
     preview_bitmap = render_preview(widgets, settings, upload_dir)
     vp.save(preview_bitmap, widgets, settings)
 
@@ -98,7 +97,7 @@ def list_printers() -> list[dict]:
     # Add virtual printers from configuration
     try:
         for config in get_virtual_printers():
-            virtual = VirtualPrinter(config["name"], config["path"], output_mode=config.get("output", "image"))
+            virtual = VirtualPrinter.from_config(config)
             printers.append({
                 "id": virtual.id,
                 "name": virtual.display_name,
@@ -179,10 +178,7 @@ def _fallback_to_virtual_bitmap(
         raise ValueError(
             "No printers available (no USB printers found and no virtual printers configured)"
         )
-    config = virtual_printers_config[0]
-    vp = VirtualPrinter(
-        config["name"], config["path"], output_mode=config.get("output", "image")
-    )
+    vp = VirtualPrinter.from_config(virtual_printers_config[0])
     vp.save(_bitmap_to_viewable(bitmap), widgets, settings)
 
 
