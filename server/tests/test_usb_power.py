@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+import state_store
 import usb_power
 
 
@@ -204,6 +205,22 @@ class TestStatePersistence:
         p.write_text('{"hub": "1-1", "port": "3"}')
         assert usb_power._load_state(p) is None
 
+    def test_load_state_warns_on_invalid_shape(self, tmp_path, caplog):
+        p = tmp_path / "state.json"
+        p.write_text('{"hub": "1-1", "port": "3"}')
+        with caplog.at_level("WARNING"):
+            assert usb_power._load_state(p) is None
+        assert any("unexpected shape" in r.message for r in caplog.records)
+
+    def test_load_state_quiet_when_no_saved_port(self, tmp_path, caplog):
+        # A file with other features' keys but no hub/port is the normal
+        # case — must not warn.
+        p = tmp_path / "state.json"
+        p.write_text('{"printers": {"a": {"tapeSizeMm": 12}}}')
+        with caplog.at_level("WARNING"):
+            assert usb_power._load_state(p) is None
+        assert not any("unexpected shape" in r.message for r in caplog.records)
+
     def test_save_state_writes_round_trippable_json(self, tmp_path):
         p = tmp_path / "state.json"
         usb_power._save_state("2-4", 7, p)
@@ -226,21 +243,21 @@ class TestStatePersistence:
         self, mock_run, tmp_path, monkeypatch
     ):
         state_file = tmp_path / "state.json"
-        monkeypatch.setattr(usb_power, "_STATE_FILE", state_file)
+        monkeypatch.setattr(state_store, "STATE_FILE", state_file)
         usb_power._last_known_port = None
 
         mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
         usb_power.find_or_recall_printer_port()
 
         # Read it back through `_load_state()` with no arg so it
-        # resolves the same monkeypatched `_STATE_FILE`.
+        # resolves the same monkeypatched default state file.
         assert usb_power._load_state() == ("1-1", 3)
 
     def test_find_or_recall_does_not_rewrite_unchanged_value(
         self, mock_run, tmp_path, monkeypatch
     ):
         state_file = tmp_path / "state.json"
-        monkeypatch.setattr(usb_power, "_STATE_FILE", state_file)
+        monkeypatch.setattr(state_store, "STATE_FILE", state_file)
         usb_power._last_known_port = ("1-1", 3)
 
         mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
