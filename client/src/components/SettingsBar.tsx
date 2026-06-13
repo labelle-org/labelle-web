@@ -1,4 +1,5 @@
 import { useLabelStore } from "../state/useLabelStore";
+import { usePrinterSettings } from "../state/usePrinterSettings";
 import { TAPE_SIZES, LABEL_COLORS } from "../lib/constants";
 import { fetchPrinters } from "../lib/api";
 import type { TapeSize, Alignment, LabelColor } from "../types/label";
@@ -12,6 +13,12 @@ export function SettingsBar() {
   const setAvailablePrinters = useLabelStore((s) => s.setAvailablePrinters);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Per-printer settings persistence: applies saved tape/color for the
+  // selected printer, and `persist` saves user changes to those. `loading`
+  // is true until those settings resolve — we disable the persisted controls
+  // until then so a late-arriving fetch can't clobber an edit.
+  const { persist, loading: settingsLoading } = usePrinterSettings();
+
   const handleRefreshPrinters = async () => {
     setIsRefreshing(true);
     try {
@@ -24,13 +31,10 @@ export function SettingsBar() {
     }
   };
 
-  // Only show printer selector if multiple printers are detected
-  // TODO: Future improvements for multi-printer UI:
-  // - Show printer status indicators (online/offline)
-  // - Display tape type/color/width for each printer
-  // - Allow users to set friendly aliases for printers
-  // - Remember last selected printer per user
-  // - Support printer-specific preset configurations
+  // Only show printer selector if multiple printers are detected.
+  // Tape size + colors now persist per printer; the rest of
+  // the multi-printer UI cluster (status indicators, capability-aware tape
+  // display, aliases, presets) is tracked in #38.
   const showPrinterSelector = availablePrinters.length > 1;
 
   // The selection shown in the dropdown. Fall back to the first printer
@@ -84,13 +88,22 @@ export function SettingsBar() {
 
       {!selectedIsVirtual && <PowerToggle />}
 
+      {settingsLoading && (
+        <span className="text-xs text-gray-500 italic">
+          Loading printer settings…
+        </span>
+      )}
+
       <Field label="Tape (mm)">
         <select
           className="input w-20"
           value={settings.tapeSizeMm}
-          onChange={(e) =>
-            update({ tapeSizeMm: Number(e.target.value) as TapeSize })
-          }
+          disabled={settingsLoading}
+          onChange={(e) => {
+            const tapeSizeMm = Number(e.target.value) as TapeSize;
+            update({ tapeSizeMm });
+            persist({ tapeSizeMm });
+          }}
         >
           {TAPE_SIZES.map((s) => (
             <option key={s} value={s}>
@@ -138,9 +151,12 @@ export function SettingsBar() {
         <select
           className="input w-24"
           value={settings.foregroundColor}
-          onChange={(e) =>
-            update({ foregroundColor: e.target.value as LabelColor })
-          }
+          disabled={settingsLoading}
+          onChange={(e) => {
+            const foregroundColor = e.target.value as LabelColor;
+            update({ foregroundColor });
+            persist({ foregroundColor });
+          }}
         >
           {LABEL_COLORS.map((c) => (
             <option key={c} value={c}>
@@ -154,9 +170,12 @@ export function SettingsBar() {
         <select
           className="input w-24"
           value={settings.backgroundColor}
-          onChange={(e) =>
-            update({ backgroundColor: e.target.value as LabelColor })
-          }
+          disabled={settingsLoading}
+          onChange={(e) => {
+            const backgroundColor = e.target.value as LabelColor;
+            update({ backgroundColor });
+            persist({ backgroundColor });
+          }}
         >
           {LABEL_COLORS.map((c) => (
             <option key={c} value={c}>

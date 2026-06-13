@@ -30,6 +30,10 @@ interface LabelStore {
   widgets: LabelWidget[];
   settings: LabelSettings;
   availablePrinters: PrinterInfo[];
+  // Whether the initial /api/printers fetch has settled. Distinguishes
+  // "not fetched yet" from "fetched, none found" so per-printer settings
+  // can hold edits until the effective printer's settings are known.
+  availablePrintersLoaded: boolean;
   batch: BatchState;
 
   addTextWidget: () => string;
@@ -52,6 +56,20 @@ interface LabelStore {
   ) => void;
 }
 
+// Default label settings — single source of truth for the store's initial
+// state and for resetting per-printer-persisted fields when a selected
+// printer has no saved settings (so it doesn't inherit the previous one's).
+export const DEFAULT_SETTINGS: LabelSettings = {
+  tapeSizeMm: 12,
+  marginPx: DEFAULT_MARGIN_PX,
+  minLengthMm: 0,
+  justify: "center",
+  foregroundColor: "black",
+  backgroundColor: "white",
+  showMargins: false,
+  cutMark: false,
+};
+
 export const useLabelStore = create<LabelStore>((set) => ({
   widgets: [
     {
@@ -65,18 +83,10 @@ export const useLabelStore = create<LabelStore>((set) => ({
     } satisfies TextWidget,
   ],
 
-  settings: {
-    tapeSizeMm: 12,
-    marginPx: DEFAULT_MARGIN_PX,
-    minLengthMm: 0,
-    justify: "center",
-    foregroundColor: "black",
-    backgroundColor: "white",
-    showMargins: false,
-    cutMark: false,
-  },
+  settings: { ...DEFAULT_SETTINGS },
 
   availablePrinters: [],
+  availablePrintersLoaded: false,
 
   batch: defaultBatch(),
 
@@ -226,16 +236,21 @@ export const useLabelStore = create<LabelStore>((set) => ({
     set((s) => {
       // Default the selection to a concrete printer — the first in the list,
       // which is the first real USB printer when one is present (virtual
-      // printers are listed after). This way a selected printer (and, with
-      // per-printer settings, its saved tape/colors) is active on load
-      // instead of an "Auto-select" placeholder. Keep the current selection
-      // if it's still connected; otherwise fall back to the first printer
-      // (or undefined when none are connected).
+      // printers are listed after). This way a selected printer (and its
+      // saved tape/colors) is active on load instead of an "Auto-select"
+      // placeholder. Keep the current selection if it's still connected;
+      // otherwise fall back to the first printer (or undefined when none are
+      // connected). availablePrintersLoaded gates the per-printer settings
+      // load until this first fetch has settled.
       const stillPresent =
         s.settings.printerId != null &&
         printers.some((p) => p.id === s.settings.printerId);
       const printerId = stillPresent ? s.settings.printerId : printers[0]?.id;
-      return { availablePrinters: printers, settings: { ...s.settings, printerId } };
+      return {
+        availablePrinters: printers,
+        availablePrintersLoaded: true,
+        settings: { ...s.settings, printerId },
+      };
     }),
 
   updateBatch: (patch) =>
@@ -276,5 +291,12 @@ export const useLabelStore = create<LabelStore>((set) => ({
     }),
 
   loadLabel: (widgets, settings, batch) =>
-    set({ widgets, settings, batch: batch ?? defaultBatch() }),
+    // Keep the currently-selected printer; a label file describes design
+    // content (tape/colors/widgets), not which printer you're on. Its
+    // printerId is stripped on export and ignored here regardless.
+    set((s) => ({
+      widgets,
+      settings: { ...settings, printerId: s.settings.printerId },
+      batch: batch ?? defaultBatch(),
+    })),
 }));

@@ -47,6 +47,7 @@ from labelle.lib.constants import DEFAULT_MARGIN_PX
 from werkzeug.utils import secure_filename
 
 import power_save
+import printer_settings
 import usb_power
 from label_builder import paint_cut_mark_in_trailing_margin, preview_label, render_payload
 from printer_service import list_printers, print_bitmap, print_label
@@ -208,6 +209,28 @@ def api_serve_upload(filename):
 @app.route("/api/printers", methods=["GET"])
 def api_printers():
     return jsonify(printers=list_printers())
+
+
+# Per-printer label settings. Printer ids contain spaces and
+# colons (e.g. "Bus 001 Device 005: ID 0922:1234", "virtual:Office"), so
+# the client URL-encodes them and we take the whole segment via <path:>.
+@app.route("/api/printers/<path:printer_id>/settings", methods=["GET"])
+def api_get_printer_settings(printer_id):
+    return jsonify(settings=printer_settings.get_settings(printer_id))
+
+
+@app.route("/api/printers/<path:printer_id>/settings", methods=["PUT"])
+def api_put_printer_settings(printer_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        # Reject malformed/non-JSON bodies rather than letting them coerce to
+        # {} and silently wipe the printer's saved settings.
+        return jsonify(status="error", message="Request body must be a JSON object"), 400
+    try:
+        saved = printer_settings.save_settings(printer_id, body)
+    except ValueError as e:
+        return jsonify(status="error", message=str(e)), 400
+    return jsonify(status="success", settings=saved)
 
 
 def _printer_port_or_404():
