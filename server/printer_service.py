@@ -6,17 +6,20 @@ from PIL import Image
 from labelle.lib.devices.device_manager import DeviceManager, DeviceManagerNoDevices
 from labelle.lib.devices.dymo_labeler import DymoLabeler
 
+import usb_power
 from config import get_virtual_printers
 from label_builder import render_payload, render_preview
 from virtual_printer import VirtualPrinter
 
 logger = logging.getLogger(__name__)
 
-# Note: libusb cache invalidation lives in `usb_power.power_on()`, not
-# here. Scans rely on the cache being already-fresh from the last power
-# transition. See `usb_power._invalidate_libusb_cache` for the rationale
-# (resetting libusb in the read path triggers kernel hub auto-resume
-# which re-energizes off ports).
+# Libusb cache invalidation is normally driven by `usb_power.power_on()`, so
+# scans rely on the cache being already-fresh from the last power transition.
+# We refresh it from this read path in exactly one case — recovering a stale
+# context after a re-enumeration (see `_list_real_printers`) — and only when
+# uhubctl confirms the device is physically present. That gate is what keeps
+# us from triggering the kernel hub auto-resume that would re-energize a
+# deliberately powered-off port. See `usb_power.invalidate_libusb_cache`.
 
 
 def _printer_id(dev) -> str:
@@ -57,42 +60,83 @@ def _fallback_to_virtual(widgets: list[dict], settings: dict, upload_dir: str) -
     vp.save(preview_bitmap, widgets, settings)
 
 
+def _scan_real_printers() -> list[dict]:
+    """Scan USB once and return real DYMO printers as dicts.
+
+    Raises DeviceManagerNoDevices when the scan finds nothing.
+    """
+    device_manager = DeviceManager()
+    device_manager.scan()
+
+    printers: list[dict] = []
+    for dev in device_manager.devices:
+        parts = []
+        if dev.manufacturer:
+            parts.append(dev.manufacturer)
+        if dev.product:
+            parts.append(dev.product)
+        if dev.serial_number:
+            parts.append(f"(S/N: {dev.serial_number})")
+
+        name = " ".join(parts) if parts else dev.usb_id
+
+        printers.append({
+            "id": _printer_id(dev),
+            "name": name,
+            "vendorProductId": dev.vendor_product_id,
+            "serialNumber": dev.serial_number,
+        })
+    return printers
+
+
+def _list_real_printers() -> list[dict]:
+    """Real USB DYMO printers, with stale-libusb-context recovery.
+
+    In a long-lived process pyusb caches its libusb context. If the printer
+    re-enumerates to a new bus address (replug, or our own USB power-cycle)
+    after that context is built, the scan keeps coming back empty even though
+    the device is physically attached. When that happens — empty scan but
+    uhubctl still sees the DYMO — drop the cached context and rescan once so
+    the device reappears without a process restart.
+
+    Never raises; returns [] on any failure.
+    """
+    try:
+        return _scan_real_printers()
+    except DeviceManagerNoDevices:
+        pass  # genuinely absent, or a stale context — disambiguate below
+    except Exception:
+        traceback.print_exc()
+        return []
+
+    # The scan found nothing. Only refresh the cache when uhubctl confirms the
+    # DYMO is still physically attached: that both targets the stale-context
+    # case and guarantees we never resume a deliberately powered-off port
+    # (where uhubctl sees no device, so this gate is False).
+    if usb_power.printer_attached():
+        logger.info(
+            "USB scan empty but uhubctl still sees the DYMO; refreshing the "
+            "stale libusb context and rescanning."
+        )
+        usb_power.invalidate_libusb_cache()
+        try:
+            return _scan_real_printers()
+        except Exception:
+            pass  # recovery didn't help; fall through to the empty result
+
+    # Expected state when no DYMO is plugged in (e.g. local dev or a host with
+    # only virtual printers). Surface as INFO without a traceback so the
+    # console stays clean across plug/unplug cycles.
+    logger.info("No USB DYMO printers detected.")
+    return []
+
+
 def list_printers() -> list[dict]:
     """List all available printers: real DYMO printers via USB and configured virtual printers.
 
     Never raises; returns partial results on scan failure.
     """
-    printers: list[dict] = []
-
-    # Add real USB printers
-    try:
-        device_manager = DeviceManager()
-        device_manager.scan()
-
-        for dev in device_manager.devices:
-            parts = []
-            if dev.manufacturer:
-                parts.append(dev.manufacturer)
-            if dev.product:
-                parts.append(dev.product)
-            if dev.serial_number:
-                parts.append(f"(S/N: {dev.serial_number})")
-
-            name = " ".join(parts) if parts else dev.usb_id
-
-            printers.append({
-                "id": _printer_id(dev),
-                "name": name,
-                "vendorProductId": dev.vendor_product_id,
-                "serialNumber": dev.serial_number,
-            })
-    except DeviceManagerNoDevices:
-        # Expected state when no DYMO is plugged in (e.g. local dev or a
-        # host with only virtual printers). Surface as INFO without a
-        # traceback so the console stays clean across plug/unplug cycles.
-        logger.info("No USB DYMO printers detected.")
-    except Exception:
-        traceback.print_exc()
+    printers: list[dict] = _list_real_printers()
 
     # Add virtual printers from configuration
     try:

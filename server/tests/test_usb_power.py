@@ -70,6 +70,36 @@ class TestFindPrinterPort:
         assert usb_power.find_printer_port("0922:1002") is None
 
 
+class TestPrinterAttached:
+    """printer_attached() is the uhubctl-based presence gate for the
+    stale-libusb-context recovery in list_printers(). It must be a quiet,
+    best-effort probe: True only when uhubctl actually sees the DYMO, and
+    silent (no power-feature warning) on the read path when uhubctl is
+    absent."""
+
+    def setup_method(self):
+        usb_power._uhubctl_missing_logged = False
+
+    def test_true_when_uhubctl_sees_dymo(self, mock_run):
+        mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
+        with patch.object(usb_power.shutil, "which", return_value="/usr/sbin/uhubctl"):
+            assert usb_power.printer_attached() is True
+
+    def test_false_when_uhubctl_sees_no_dymo(self, mock_run):
+        mock_run.return_value = _result(UHUBCTL_DEFAULT_OUTPUT)
+        with patch.object(usb_power.shutil, "which", return_value="/usr/sbin/uhubctl"):
+            assert usb_power.printer_attached("dead:beef") is False
+
+    def test_quiet_and_false_when_uhubctl_missing(self, mock_run, caplog):
+        # The whole point of the review fix: a missing uhubctl on the read
+        # path must NOT run uhubctl or log the "uhubctl missing" warning.
+        with patch.object(usb_power.shutil, "which", return_value=None):
+            with caplog.at_level("WARNING", logger="usb_power"):
+                assert usb_power.printer_attached() is False
+        mock_run.assert_not_called()
+        assert not [r for r in caplog.records if "uhubctl" in r.message]
+
+
 class TestUhubctlMissing:
     """When uhubctl isn't installed (e.g. local dev outside Docker),
     subprocess.run raises FileNotFoundError. Surface that as a benign
