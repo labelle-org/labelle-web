@@ -126,7 +126,10 @@ The backend supports two types of printers:
 
 #### Real USB Printers
 - Detected via `DeviceManager().scan()` from labelle library
-- Identified by USB bus/address (e.g. "Bus 001 Device 005: ID 0922:1234")
+- Identified by serial number (`serial:<sn>`) when the device reports one,
+  falling back to the USB bus/address (`Bus 001 Device 005: ID 0922:1234`)
+  only when it doesn't. The serial is stable across re-enumeration (replug,
+  reboot, USB power-cycle); the bus/address is not. See `_printer_id`.
 - Send output directly to USB device via labelle's `DymoLabeler.print()`
 
 #### Virtual Printers
@@ -136,7 +139,7 @@ The backend supports two types of printers:
 - Useful for testing, archiving, and development without hardware
 
 **Printer ID Format:**
-- Real printers: Full USB ID string from device manager
+- Real printers: `serial:{serial_number}`, or the full USB bus/address ID string when the device reports no serial
 - Virtual printers: `virtual:{name}` where name has spaces/special chars replaced with underscores
 
 **Output Filename Format (virtual printers):** `label_YYYYMMDD_HHMMSS_uuid.png`

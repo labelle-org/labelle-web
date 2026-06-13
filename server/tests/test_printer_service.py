@@ -24,6 +24,74 @@ def sample_settings():
     }
 
 
+def _fake_device(serial="08383504012013", usb_id="Bus 001 Device 005: ID 0922:1002"):
+    dev = MagicMock()
+    dev.serial_number = serial
+    dev.usb_id = usb_id
+    dev.vendor_product_id = "0922:1002"
+    dev.manufacturer = "DYMO"
+    dev.product = "LabelManager PnP"
+    return dev
+
+
+class TestStablePrinterId:
+    """Real-printer ids must be keyed by serial (stable across
+    re-enumeration), falling back to usb_id only when no serial. See #40."""
+
+    def test_uses_serial_when_present(self):
+        from printer_service import _printer_id
+
+        assert _printer_id(_fake_device(serial="ABC123")) == "serial:ABC123"
+
+    def test_falls_back_to_usb_id_when_no_serial(self):
+        from printer_service import _printer_id
+
+        dev = _fake_device(serial=None, usb_id="Bus 001 Device 005: ID 0922:1002")
+        assert _printer_id(dev) == "Bus 001 Device 005: ID 0922:1002"
+
+    @patch("printer_service.DeviceManager")
+    def test_list_printers_emits_serial_based_id(self, mock_dm_cls, no_virtual_printers_env):
+        mock_dm = MagicMock()
+        mock_dm.devices = [_fake_device(serial="ABC123")]
+        mock_dm_cls.return_value = mock_dm
+
+        from printer_service import list_printers
+
+        real = [p for p in list_printers() if p["vendorProductId"] == "0922:1002"]
+        assert real[0]["id"] == "serial:ABC123"
+
+    @patch("printer_service.render_payload")
+    @patch("printer_service.DymoLabeler")
+    @patch("printer_service.DeviceManager")
+    def test_print_resolves_device_by_serial_id(
+        self, mock_dm_cls, mock_labeler_cls, mock_render, sample_widgets, sample_settings
+    ):
+        dev = _fake_device(serial="ABC123")
+        mock_dm = MagicMock()
+        mock_dm.devices = [dev]
+        mock_dm_cls.return_value = mock_dm
+
+        from printer_service import print_label
+
+        # The same id list_printers emits must resolve back to the device.
+        print_label(sample_widgets, sample_settings, printer_id="serial:ABC123")
+        dev.setup.assert_called_once()
+        mock_labeler_cls.return_value.print.assert_called_once()
+
+    @patch("printer_service.DeviceManager")
+    def test_print_raises_when_serial_id_does_not_match(
+        self, mock_dm_cls, sample_widgets, sample_settings
+    ):
+        mock_dm = MagicMock()
+        mock_dm.devices = [_fake_device(serial="ABC123")]
+        mock_dm_cls.return_value = mock_dm
+
+        from printer_service import print_label
+
+        with pytest.raises(ValueError, match="Printer not found"):
+            print_label(sample_widgets, sample_settings, printer_id="serial:NOPE")
+
+
 class TestListPrinters:
     @patch("printer_service.DeviceManager")
     def test_returns_virtual_printers(self, mock_dm_cls, virtual_printer_env):
