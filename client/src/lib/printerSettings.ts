@@ -31,11 +31,10 @@ export function effectivePrinterId(
   return undefined;
 }
 
-/** Extract just the per-printer-persisted subset from full label settings. */
+/** Extract just the per-printer-persisted subset from full label settings.
+ *  Derived from PERSISTED_PRINTER_KEYS so it can't drift from that list. */
 export function pickPersisted(settings: LabelSettings): PersistedPrinterSettings {
-  return {
-    tapeSizeMm: settings.tapeSizeMm,
-    foregroundColor: settings.foregroundColor,
-    backgroundColor: settings.backgroundColor,
-  };
+  return Object.fromEntries(
+    PERSISTED_PRINTER_KEYS.map((key) => [key, settings[key]]),
+  ) as PersistedPrinterSettings;
 }
