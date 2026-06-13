@@ -106,6 +106,19 @@ describe("SettingsBar printer selector", () => {
 
     expect(useLabelStore.getState().settings.printerId).toBe("virtual:Office");
   });
+
+  it("shows the first printer when printerId is unset (no blank value)", () => {
+    // printerId undefined but multiple printers present (e.g. transiently
+    // after an import) — the select must display a real option, not blank.
+    useLabelStore.setState({
+      availablePrinters: twoPrinters,
+      settings: { ...useLabelStore.getState().settings, printerId: undefined },
+    });
+    render(<SettingsBar />);
+    screen.getByText("Settings").click();
+
+    expect(screen.getByDisplayValue("DYMO LabelWriter 450")).toBeInTheDocument();
+  });
 });
 
 describe("SettingsBar power toggle visibility", () => {
