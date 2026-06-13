@@ -19,6 +19,24 @@ logger = logging.getLogger(__name__)
 # which re-energizes off ports).
 
 
+def _printer_id(dev) -> str:
+    """Stable id for a real USB printer.
+
+    Prefer the device serial number: it survives re-enumeration (replug,
+    reboot, and this app's own USB power-cycling), whereas labelle's
+    `usb_id` embeds the kernel-assigned Bus/Device address, which changes
+    on every re-enumeration and would orphan that printer's saved settings.
+    Fall back to `usb_id` only when the device reports no serial. See #40.
+
+    Used both when listing printers and when resolving a print request's
+    printer_id back to a device, so the two always agree.
+    """
+    serial = dev.serial_number
+    if serial:
+        return f"serial:{serial}"
+    return dev.usb_id
+
+
 def _find_virtual_printer(printer_id: str) -> VirtualPrinter:
     """Resolve a virtual printer by its ID (e.g. 'virtual:Office_Printer')."""
     for config in get_virtual_printers():
@@ -64,7 +82,7 @@ def list_printers() -> list[dict]:
             name = " ".join(parts) if parts else dev.usb_id
 
             printers.append({
-                "id": dev.usb_id,
+                "id": _printer_id(dev),
                 "name": name,
                 "vendorProductId": dev.vendor_product_id,
                 "serialNumber": dev.serial_number,
@@ -102,9 +120,10 @@ def print_label(
         widgets: List of widget dictionaries to render
         settings: Label settings (tape size, margins, etc.)
         upload_dir: Directory where uploaded images are stored
-        printer_id: Optional printer ID. Can be:
-                   - USB ID (e.g. "Bus 001 Device 005: ID 0922:1234") for real printer
-                   - virtual:name (e.g. "virtual:Office_Printer") for virtual printer
+        printer_id: Optional printer ID (see _printer_id). Can be:
+                   - "serial:<sn>" for a real printer reporting a serial
+                     (falls back to "Bus NNN Device NNN: ID vvvv:pppp" if not)
+                   - "virtual:<name>" for a virtual printer
                    - None to auto-select first available real printer
     """
     # Virtual printer request
@@ -120,9 +139,8 @@ def print_label(
         device_manager = DeviceManager()
         device_manager.scan()
 
-        # TODO: Future improvement - store per-printer settings (tape size, margins, color)
         if printer_id:
-            matching_devices = [dev for dev in device_manager.devices if dev.usb_id == printer_id]
+            matching_devices = [dev for dev in device_manager.devices if _printer_id(dev) == printer_id]
             if not matching_devices:
                 raise ValueError(f"Printer not found: {printer_id}")
             device = matching_devices[0]
@@ -200,7 +218,7 @@ def print_bitmap(
         device_manager = DeviceManager()
         device_manager.scan()
         if printer_id:
-            matching = [d for d in device_manager.devices if d.usb_id == printer_id]
+            matching = [d for d in device_manager.devices if _printer_id(d) == printer_id]
             if not matching:
                 raise ValueError(f"Printer not found: {printer_id}")
             device = matching[0]
