@@ -34,9 +34,8 @@ export function SettingsBar() {
   const showPrinterSelector = availablePrinters.length > 1;
 
   // Hide the USB power toggle when a virtual printer is selected —
-  // virtual printers don't have a USB port to power off. When
-  // Auto-select is active or a real USB printer is selected, the
-  // toggle stays visible (and itself hides if the server can't
+  // virtual printers don't have a USB port to power off. For a real USB
+  // printer the toggle stays visible (and itself hides if the server can't
   // resolve a controllable port).
   const selectedPrinter = settings.printerId
     ? availablePrinters.find((p) => p.id === settings.printerId)
@@ -55,11 +54,8 @@ export function SettingsBar() {
             <select
               className="input w-48"
               value={settings.printerId || ""}
-              onChange={(e) =>
-                update({ printerId: e.target.value || undefined })
-              }
+              onChange={(e) => update({ printerId: e.target.value })}
             >
-              <option value="">Auto-select</option>
               {availablePrinters.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
