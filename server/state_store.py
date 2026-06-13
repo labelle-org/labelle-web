@@ -50,7 +50,7 @@ def read_all(path: Path | None = None) -> dict:
     if path is None:
         path = STATE_FILE
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -83,7 +83,7 @@ def update(mutator: Callable[[dict], None], path: Path | None = None) -> dict:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(path.suffix + ".tmp")
-            tmp.write_text(json.dumps(data))
+            tmp.write_text(json.dumps(data), encoding="utf-8")
             tmp.replace(path)
         except (OSError, TypeError, ValueError) as e:
             logger.warning("Could not write state file %s: %s", path, e)
