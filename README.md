@@ -179,6 +179,7 @@ Each printer configuration has the following fields:
 - `name`: Display name (will appear as "{name} (Virtual)" in UI)
 - `path`: Directory where output will be saved (created automatically)
 - `output` *(optional)*: What to save — `"image"` (default), `"json"`, or `"both"`. `"image"` saves a color preview PNG, `"json"` saves the label data for re-importing later.
+- `id` *(optional)*: A stable identifier (URL-safe `[A-Za-z0-9_-]`) decoupled from the display name. Set it if you want a printer's saved settings to survive renaming it; otherwise the id is derived from the name. Entries with a colliding id are skipped.
 
 ```bash
 # Example with output mode:

@@ -31,6 +31,55 @@ class TestGetVirtualPrinters:
         result = get_virtual_printers()
         assert len(result) == 2
 
+    def test_explicit_id_is_kept(self):
+        config = [{"id": "office", "name": "Office (2nd Floor)", "path": "/tmp/o"}]
+        self._set_env(json.dumps(config))
+        result = get_virtual_printers()
+        assert len(result) == 1
+        assert result[0]["id"] == "office"
+
+    def test_invalid_explicit_id_is_skipped(self):
+        config = [{"id": "bad/id", "name": "Office", "path": "/tmp/o"}]
+        self._set_env(json.dumps(config))
+        assert get_virtual_printers() == []
+
+    def test_colliding_derived_ids_skip_the_later(self):
+        # Both names slug to virtual:Office_Floor_2 — keep the first only.
+        config = [
+            {"name": "Office Floor 2", "path": "/tmp/a"},
+            {"name": "Office (Floor 2)", "path": "/tmp/b"},
+        ]
+        self._set_env(json.dumps(config))
+        result = get_virtual_printers()
+        assert len(result) == 1
+        assert result[0]["path"] == "/tmp/a"
+
+    def test_colliding_explicit_id_skips_the_later(self):
+        config = [
+            {"id": "shared", "name": "A", "path": "/tmp/a"},
+            {"id": "shared", "name": "B", "path": "/tmp/b"},
+        ]
+        self._set_env(json.dumps(config))
+        result = get_virtual_printers()
+        assert len(result) == 1
+        assert result[0]["name"] == "A"
+
+    def test_non_string_name_is_skipped_not_crash(self):
+        # A non-string name must not crash id computation (re.sub); skip it.
+        config = [
+            {"name": 123, "path": "/tmp/a"},
+            {"name": "Good", "path": "/tmp/b"},
+        ]
+        self._set_env(json.dumps(config))
+        result = get_virtual_printers()
+        assert len(result) == 1
+        assert result[0]["name"] == "Good"
+
+    def test_non_string_path_is_skipped(self):
+        config = [{"name": "X", "path": 5}]
+        self._set_env(json.dumps(config))
+        assert get_virtual_printers() == []
+
     def test_empty_env_var(self):
         self._set_env("")
         result = get_virtual_printers()
