@@ -285,6 +285,89 @@ describe("Variable rename in batch rows", () => {
     expect(rowValues(0)).toEqual({ names: "Alice" });
   });
 
+  it("carries values through a backspace-to-empty rename (color -> size)", () => {
+    const id = seedTextWidgetWith("{{color}}");
+    useLabelStore.setState({
+      batch: {
+        copies: 1,
+        pauseTime: 0,
+        rows: seedRows([{ color: "red" }, { color: "blue" }]),
+        selectedRowIndex: null,
+      },
+    });
+
+    // The gesture the user actually makes: backspace "color" down to {{}} one
+    // character at a time, then type "size". Every keystroke is its own
+    // updateWidget call — the empty {{}} state must not orphan the value.
+    const steps = [
+      "{{colo}}", "{{col}}", "{{co}}", "{{c}}", "{{}}",
+      "{{s}}", "{{si}}", "{{siz}}", "{{size}}",
+    ];
+    for (const text of steps) {
+      useLabelStore.getState().updateWidget(id, { text });
+    }
+
+    const widget = useLabelStore.getState().widgets[0] as { text: string };
+    expect(widget.text).toBe("{{size}}");
+    expect(rowValues(0)).toEqual({ size: "red" });
+    expect(rowValues(1)).toEqual({ size: "blue" });
+  });
+
+  it("preserves the value across the empty {{}} intermediate state", () => {
+    const id = seedTextWidgetWith("{{name}}");
+    useLabelStore.setState({
+      batch: {
+        copies: 1,
+        pauseTime: 0,
+        rows: seedRows([{ name: "Alice" }]),
+        selectedRowIndex: null,
+      },
+    });
+
+    // Backspaced the whole name (held under the empty key)…
+    useLabelStore.getState().updateWidget(id, { text: "{{}}" });
+    // …then a fresh name picks it back up.
+    useLabelStore.getState().updateWidget(id, { text: "{{email}}" });
+
+    expect(rowValues(0)).toEqual({ email: "Alice" });
+  });
+
+  it("propagates a backspace rename to other widgets sharing the variable", () => {
+    useLabelStore.setState({
+      widgets: [
+        {
+          id: "w1",
+          type: "text",
+          text: "{{color}}",
+          fontStyle: "regular",
+          fontScale: DEFAULT_FONT_SCALE,
+          frameWidthPx: 0,
+          align: "left",
+        },
+        { id: "w2", type: "qr", content: "{{color}}" },
+      ],
+      batch: {
+        copies: 1,
+        pauseTime: 0,
+        rows: seedRows([{ color: "red" }]),
+        selectedRowIndex: null,
+      },
+    });
+
+    const steps = [
+      "{{colo}}", "{{col}}", "{{co}}", "{{c}}", "{{}}",
+      "{{s}}", "{{si}}", "{{siz}}", "{{size}}",
+    ];
+    for (const text of steps) {
+      useLabelStore.getState().updateWidget("w1", { text });
+    }
+
+    const widgets = useLabelStore.getState().widgets;
+    expect((widgets[0] as { text: string }).text).toBe("{{size}}");
+    expect((widgets[1] as { content: string }).content).toBe("{{size}}");
+    expect(rowValues(0)).toEqual({ size: "red" });
+  });
+
   it("does not touch rows when a variable is purely added", () => {
     const id = seedTextWidgetWith("{{name}}");
     useLabelStore.setState({
