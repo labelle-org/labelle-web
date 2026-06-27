@@ -26,8 +26,9 @@ describe("exportLabel", () => {
 
   it("strips the transient empty-string rename key from exported rows", async () => {
     // Backspacing a variable name to {{}} parks its value under "" in the
-    // store; that must not leak into a shared file.
-    const widgets: LabelWidget[] = [{ id: "1", type: "text", text: "{{name}}" }];
+    // store; that must not leak into a shared file. (The widget is incidental
+    // here — what matters is the batch rows.)
+    const widgets: LabelWidget[] = [{ id: "1", type: "qr", content: "x" }];
     const batch: BatchState = {
       copies: 1,
       pauseTime: 0,
@@ -40,7 +41,7 @@ describe("exportLabel", () => {
 
   it("omits the batch block entirely when a row holds only the empty key", async () => {
     // User backspaced to {{}} and abandoned the edit: nothing real to persist.
-    const widgets: LabelWidget[] = [{ id: "1", type: "text", text: "{{}}" }];
+    const widgets: LabelWidget[] = [{ id: "1", type: "qr", content: "x" }];
     const batch: BatchState = {
       copies: 1,
       pauseTime: 0,
