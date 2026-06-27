@@ -173,24 +173,42 @@ export const useLabelStore = create<LabelStore>((set) => ({
       // unrelated edits in two widgets could each contribute a single add
       // and remove.
       //
-      // Known limitation: keystroke-by-keystroke typing in a controlled
-      // <input> (e.g. {{name}} -> {{names} -> {{names}}) hits an
-      // intermediate state with no closing braces, where detectVariables
-      // returns []. The transition then looks like a pure removal followed
-      // (one keystroke later) by a pure addition — neither half triggers
-      // the rename branch, and the row value for the old name orphans. In
-      // practice users edit via select-and-replace or paste, which works.
-      // See docs/ARCHITECTURE.md "Variable rename heuristic" for context.
-      const before = detectVariables([oldWidget]);
-      const after = detectVariables([newWidget]);
+      // `includeEmpty` is what makes a backspace rename safe: deleting a
+      // variable's name down to the empty placeholder `{{}}` and retyping
+      // passes through `{{old}} -> {{}} -> {{new}}`. Counting `{{}}` as a
+      // (transient) variable turns that into a chain of single renames
+      // (old -> "" -> new), so the batch value rides along under the empty
+      // key instead of orphaning at the empty step.
+      //
+      // Remaining limitation: an edit that destroys a brace too (e.g.
+      // {{name}} -> {{names} -> {{names}}) still passes through a state with
+      // no complete placeholder, which reads as a pure removal then addition
+      // and orphans the value. Backspacing only the name (braces intact),
+      // select-and-replace, and paste all work. See docs/ARCHITECTURE.md
+      // "Variable rename heuristic".
+      const before = detectVariables([oldWidget], { includeEmpty: true });
+      const after = detectVariables([newWidget], { includeEmpty: true });
       const removed = before.filter((v) => !after.includes(v));
       const added = after.filter((v) => !before.includes(v));
 
       if (removed.length === 1 && added.length === 1) {
         const oldName = removed[0]!;
         const newName = added[0]!;
+        // The empty placeholder `{{}}` is the rename bridge (oldName or newName
+        // can be ""). Two consequences, both deliberately accepted as the price
+        // of bridging — the alternative (no bridge) loses the value outright:
+        //   1. The held value lives under the "" key until the new name is
+        //      typed; if the user abandons the edit at `{{}}` it lingers there.
+        //      It never renders or substitutes (those use the non-empty regex)
+        //      and is stripped on export (see labelFile.withoutEmptyKey).
+        //   2. `{{}}` is not a unique identity across widgets, so propagating an
+        //      empty oldName rewrites any other widget that also sits at `{{}}`,
+        //      and a second variable parked at `{{}}` would clobber the "" key.
+        //      Only reachable by editing two variables to empty at once — not a
+        //      single-rename gesture.
         // Variable names match [\w-]+; none of those characters need regex
-        // escaping (hyphen is only a metacharacter inside character classes).
+        // escaping (hyphen is only a metacharacter inside character classes),
+        // and the empty case yields the literal /\{\{\}\}/.
         const placeholderRe = new RegExp(`\\{\\{${oldName}\\}\\}`, "g");
         const newPlaceholder = `{{${newName}}}`;
 
