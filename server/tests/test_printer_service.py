@@ -384,14 +384,18 @@ class TestPrintStaleLibusbContextRecovery:
         self, mock_dm_cls, mock_labeler_cls, mock_render, mock_usb_power,
         sample_widgets, sample_settings,
     ):
-        """Auto-select (printer_id=None) resolves via find_and_select_device;
-        it too must recover from a stale context rather than wrongly falling
-        back to a virtual printer when the real one is attached."""
+        """Auto-select (printer_id=None) must recover from a stale context
+        rather than wrongly falling back to a virtual printer when the real one
+        is attached. The real stale symptom is an empty libusb scan, i.e.
+        scan() raising DeviceManagerNoDevices — not find_and_select_device."""
         from labelle.lib.devices.device_manager import DeviceManagerNoDevices
 
         dev = _fake_device(serial="ABC123")
         mock_dm = MagicMock()
-        mock_dm.find_and_select_device.side_effect = [DeviceManagerNoDevices("none"), dev]
+        # First scan: stale context sees nothing. After cache invalidation the
+        # second scan re-enumerates and find_and_select_device returns the device.
+        mock_dm.scan.side_effect = [DeviceManagerNoDevices("none"), None]
+        mock_dm.find_and_select_device.return_value = dev
         mock_dm_cls.return_value = mock_dm
         mock_usb_power.printer_attached.return_value = True
 
@@ -401,6 +405,22 @@ class TestPrintStaleLibusbContextRecovery:
 
         mock_usb_power.invalidate_libusb_cache.assert_called_once()
         dev.setup.assert_called_once()
+
+    @patch("printer_service.DeviceManager")
+    def test_scan_and_select_handles_find_and_select_device_error(self, mock_dm_cls):
+        """find_and_select_device raises the parent DeviceManagerError (not the
+        NoDevices subclass) when a scan finds devices but none are usable.
+        _scan_and_select must treat that as "no device" (None), like an empty
+        scan — otherwise the exception escapes the recovery gate."""
+        from labelle.lib.devices.device_manager import DeviceManagerError
+
+        mock_dm = MagicMock()
+        mock_dm.find_and_select_device.side_effect = DeviceManagerError("No matching devices found")
+        mock_dm_cls.return_value = mock_dm
+
+        from printer_service import _scan_and_select
+
+        assert _scan_and_select(None) is None
 
 
 class TestAutoSelectWithVirtualPrinters:
