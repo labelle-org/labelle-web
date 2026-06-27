@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 
 from label_builder import (
+    DEFAULT_FONT_SCALE,
     _build_render_engines,
     mm_to_payload_px,
     preview_label,
@@ -115,6 +116,46 @@ class TestBuildRenderEngines:
         engines = _build_render_engines(widgets)
         assert len(engines) == 1
         assert isinstance(engines[0], BarcodeRenderEngine)
+
+
+class TestFontScaleGuard:
+    """A non-positive or non-numeric fontScale must not crash rendering.
+
+    labelle computes the pixel font size as round(line_height * fontScale/100)
+    and PIL's ImageFont rejects a size of 0, so a fontScale of 0 — which the UI
+    produces the moment the Scale field is cleared (Number("") === 0), and which
+    a malformed label file or direct API call can also carry — would otherwise
+    500 the whole preview/print. We fall back to the default instead. See #49."""
+
+    def test_zero_font_scale_falls_back_to_default(self):
+        widgets = [{"type": "text", "text": "Hello", "id": "1", "fontScale": 0}]
+        engines = _build_render_engines(widgets)
+        assert engines[0].font_size_ratio == DEFAULT_FONT_SCALE / 100.0
+
+    def test_negative_font_scale_falls_back_to_default(self):
+        widgets = [{"type": "text", "text": "Hello", "id": "1", "fontScale": -20}]
+        engines = _build_render_engines(widgets)
+        assert engines[0].font_size_ratio == DEFAULT_FONT_SCALE / 100.0
+
+    def test_non_numeric_font_scale_falls_back_to_default(self):
+        widgets = [{"type": "text", "text": "Hello", "id": "1", "fontScale": None}]
+        engines = _build_render_engines(widgets)
+        assert engines[0].font_size_ratio == DEFAULT_FONT_SCALE / 100.0
+
+    def test_valid_font_scale_is_preserved(self):
+        widgets = [{"type": "text", "text": "Hello", "id": "1", "fontScale": 50}]
+        engines = _build_render_engines(widgets)
+        assert engines[0].font_size_ratio == 0.5
+
+    def test_missing_font_scale_uses_default(self):
+        widgets = [{"type": "text", "text": "Hello", "id": "1"}]
+        engines = _build_render_engines(widgets)
+        assert engines[0].font_size_ratio == DEFAULT_FONT_SCALE / 100.0
+
+    def test_preview_with_zero_font_scale_does_not_raise(self):
+        widgets = [{"type": "text", "text": "Hello", "id": "1", "fontScale": 0}]
+        result = preview_label(widgets, {"tapeSizeMm": 12})
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 class TestPreviewLabel:
