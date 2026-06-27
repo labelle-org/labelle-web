@@ -1,5 +1,6 @@
 import { useLabelStore } from "../state/useLabelStore";
 import type { TextWidget, FontStyle, Alignment } from "../types/label";
+import { NumberField } from "./NumberField";
 
 export function TextWidgetEditor({ widget }: { widget: TextWidget }) {
   const update = useLabelStore((s) => s.updateWidget);
@@ -30,33 +31,23 @@ export function TextWidgetEditor({ widget }: { widget: TextWidget }) {
           </select>
         </label>
 
-        <label className="flex items-center gap-1 text-xs">
-          Scale %
-          <input
-            type="number"
-            className="input text-xs w-16"
-            min={10}
-            max={150}
-            value={widget.fontScale}
-            onChange={(e) =>
-              update(widget.id, { fontScale: Number(e.target.value) })
-            }
-          />
-        </label>
+        <NumberField
+          label="Scale %"
+          className="input text-xs w-16"
+          min={10}
+          max={150}
+          value={widget.fontScale}
+          onChange={(fontScale) => update(widget.id, { fontScale })}
+        />
 
-        <label className="flex items-center gap-1 text-xs">
-          Frame
-          <input
-            type="number"
-            className="input text-xs w-14"
-            min={0}
-            max={20}
-            value={widget.frameWidthPx}
-            onChange={(e) =>
-              update(widget.id, { frameWidthPx: Number(e.target.value) })
-            }
-          />
-        </label>
+        <NumberField
+          label="Frame"
+          className="input text-xs w-14"
+          min={0}
+          max={20}
+          value={widget.frameWidthPx}
+          onChange={(frameWidthPx) => update(widget.id, { frameWidthPx })}
+        />
 
         <label className="flex items-center gap-1 text-xs">
           Align

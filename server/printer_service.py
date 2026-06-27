@@ -3,7 +3,11 @@ import traceback
 
 from PIL import Image
 
-from labelle.lib.devices.device_manager import DeviceManager, DeviceManagerNoDevices
+from labelle.lib.devices.device_manager import (
+    DeviceManager,
+    DeviceManagerError,
+    DeviceManagerNoDevices,
+)
 from labelle.lib.devices.dymo_labeler import DymoLabeler
 
 import usb_power
@@ -163,6 +167,12 @@ def _scan_and_select(printer_id: str | None):
     attempt stale-context recovery before giving up. Mirrors the resolution
     logic list_printers uses, but yields the live device object the print path
     needs rather than a descriptor dict.
+
+    Catches the parent `DeviceManagerError`, not just `DeviceManagerNoDevices`:
+    an empty scan raises the subclass, but `find_and_select_device()` raises the
+    plain parent ("No matching devices found") when a scan finds devices yet
+    none are usable. Both mean "no device to print to" — collapse them to None so
+    the recovery gate and the caller's fallback see a uniform result.
     """
     device_manager = DeviceManager()
     try:
@@ -173,7 +183,7 @@ def _scan_and_select(printer_id: str | None):
                 None,
             )
         return device_manager.find_and_select_device()
-    except DeviceManagerNoDevices:
+    except DeviceManagerError:
         return None
 
 

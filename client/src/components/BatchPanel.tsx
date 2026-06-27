@@ -180,7 +180,7 @@ export function BatchPanel() {
                           </td>
                         ))}
                         <td className="border border-gray-200 px-1 py-0.5">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-4">
                             <button
                               className={
                                 isPreviewed
