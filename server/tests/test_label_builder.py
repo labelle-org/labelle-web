@@ -142,6 +142,19 @@ class TestFontScaleGuard:
         engines = _build_render_engines(widgets)
         assert engines[0].font_size_ratio == DEFAULT_FONT_SCALE / 100.0
 
+    def test_nan_and_infinity_fall_back_to_default(self):
+        # Flask's JSON parser accepts the NaN/Infinity literals, and both slip
+        # past a plain `<= 0` check before exploding in PIL's int conversion.
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            widgets = [{"type": "text", "text": "Hi", "id": "1", "fontScale": bad}]
+            engines = _build_render_engines(widgets)
+            assert engines[0].font_size_ratio == DEFAULT_FONT_SCALE / 100.0
+
+    def test_preview_with_nan_font_scale_does_not_raise(self):
+        widgets = [{"type": "text", "text": "Hi", "id": "1", "fontScale": float("nan")}]
+        result = preview_label(widgets, {"tapeSizeMm": 6})
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
     def test_valid_font_scale_is_preserved(self):
         widgets = [{"type": "text", "text": "Hello", "id": "1", "fontScale": 50}]
         engines = _build_render_engines(widgets)

@@ -1,3 +1,4 @@
+import math
 import os
 from io import BytesIO
 
@@ -45,13 +46,21 @@ def _font_size_ratio(widget: dict) -> float:
     render. The UI produces exactly that the instant the Scale field is cleared
     (Number("") === 0), and a malformed label file or direct API call can carry
     it too — so fall back to the default rather than crash. See #49.
+
+    NaN and Infinity get the same treatment: Flask's JSON parser accepts the
+    `NaN`/`Infinity` literals, and both slip past a plain `<= 0` check (then
+    blow up in PIL's int conversion), so guard with `math.isfinite`.
+
+    Note: a tiny *positive* fontScale can still round to 0 px on a small tape
+    (or with many lines) and raise. That's out of reach from the UI (min 10)
+    and tape-dependent, so it isn't normalized here; see #49 for the residual.
     """
     raw = widget.get("fontScale", DEFAULT_FONT_SCALE)
     try:
         scale = float(raw)
     except (TypeError, ValueError):
         scale = DEFAULT_FONT_SCALE
-    if scale <= 0:
+    if not math.isfinite(scale) or scale <= 0:
         scale = DEFAULT_FONT_SCALE
     return scale / 100.0
 
