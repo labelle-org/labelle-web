@@ -28,11 +28,28 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+// While renaming a variable by backspacing its name to `{{}}`, the store
+// briefly parks that row's value under the empty-string key (see the rename
+// handling in useLabelStore). It's never a real column, and if the user
+// abandons the edit at `{{}}` it can linger — so strip it from anything we
+// persist rather than leak `{"": "..."}` into shared label files.
+function withoutEmptyKey(
+  values: Record<string, string>,
+): Record<string, string> {
+  if (!("" in values)) return values;
+  const rest: Record<string, string> = {};
+  for (const [k, v] of Object.entries(values)) {
+    if (k !== "") rest[k] = v;
+  }
+  return rest;
+}
+
 function _hasBatchData(batch: BatchState): boolean {
   if (batch.copies !== 1) return true;
   if (batch.pauseTime !== 0) return true;
   if (batch.rows.length > 1) return true;
-  if (batch.rows.some((r) => Object.keys(r.values).length > 0)) return true;
+  if (batch.rows.some((r) => Object.keys(withoutEmptyKey(r.values)).length > 0))
+    return true;
   return false;
 }
 
@@ -85,8 +102,9 @@ export async function exportLabel(
     data.batch = {
       copies: batch.copies,
       pauseTime: batch.pauseTime,
-      // Strip the internal `id` — it's a runtime React-key concern only.
-      rows: batch.rows.map((r) => r.values),
+      // Strip the internal `id` (runtime React-key only) and the transient
+      // empty-string rename key.
+      rows: batch.rows.map((r) => withoutEmptyKey(r.values)),
     };
   }
 

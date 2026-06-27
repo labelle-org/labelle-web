@@ -194,8 +194,21 @@ export const useLabelStore = create<LabelStore>((set) => ({
       if (removed.length === 1 && added.length === 1) {
         const oldName = removed[0]!;
         const newName = added[0]!;
+        // The empty placeholder `{{}}` is the rename bridge (oldName or newName
+        // can be ""). Two consequences, both deliberately accepted as the price
+        // of bridging — the alternative (no bridge) loses the value outright:
+        //   1. The held value lives under the "" key until the new name is
+        //      typed; if the user abandons the edit at `{{}}` it lingers there.
+        //      It never renders or substitutes (those use the non-empty regex)
+        //      and is stripped on export (see labelFile.withoutEmptyKey).
+        //   2. `{{}}` is not a unique identity across widgets, so propagating an
+        //      empty oldName rewrites any other widget that also sits at `{{}}`,
+        //      and a second variable parked at `{{}}` would clobber the "" key.
+        //      Only reachable by editing two variables to empty at once — not a
+        //      single-rename gesture.
         // Variable names match [\w-]+; none of those characters need regex
-        // escaping (hyphen is only a metacharacter inside character classes).
+        // escaping (hyphen is only a metacharacter inside character classes),
+        // and the empty case yields the literal /\{\{\}\}/.
         const placeholderRe = new RegExp(`\\{\\{${oldName}\\}\\}`, "g");
         const newPlaceholder = `{{${newName}}}`;
 
