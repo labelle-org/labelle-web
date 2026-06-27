@@ -1,3 +1,4 @@
+import math
 import os
 from io import BytesIO
 
@@ -29,6 +30,39 @@ from labelle.lib.render_engines.text import TextRenderEngine
 def mm_to_payload_px(mm: float, margin: float) -> float:
     """Convert a length in mm to pixels of payload, subtracting margin from each side."""
     return max(0, (mm * PIXELS_PER_MM) - margin * 2)
+
+
+# Text scale as a percentage; matches the client default (DEFAULT_FONT_SCALE in
+# client/src/lib/constants.ts). Used as the fallback when a widget carries an
+# unusable fontScale.
+DEFAULT_FONT_SCALE = 90
+
+
+def _font_size_ratio(widget: dict) -> float:
+    """A text widget's fontScale (%) as a positive ratio for TextRenderEngine.
+
+    labelle sizes the font as round(line_height * ratio) and PIL rejects a
+    size of 0, so a non-positive or non-numeric fontScale would 500 the whole
+    render. The UI produces exactly that the instant the Scale field is cleared
+    (Number("") === 0), and a malformed label file or direct API call can carry
+    it too — so fall back to the default rather than crash. See #49.
+
+    NaN and Infinity get the same treatment: Flask's JSON parser accepts the
+    `NaN`/`Infinity` literals, and both slip past a plain `<= 0` check (then
+    blow up in PIL's int conversion), so guard with `math.isfinite`.
+
+    Note: a tiny *positive* fontScale can still round to 0 px on a small tape
+    (or with many lines) and raise. That's out of reach from the UI (min 10)
+    and tape-dependent, so it isn't normalized here; see #49 for the residual.
+    """
+    raw = widget.get("fontScale", DEFAULT_FONT_SCALE)
+    try:
+        scale = float(raw)
+    except (TypeError, ValueError):
+        scale = DEFAULT_FONT_SCALE
+    if not math.isfinite(scale) or scale <= 0:
+        scale = DEFAULT_FONT_SCALE
+    return scale / 100.0
 
 
 # Cut-mark pattern. CUT_MARK_ON pixels on, CUT_MARK_OFF off, repeated for the
@@ -101,7 +135,7 @@ def _build_render_engines(
                     text_lines=text.split("\n"),
                     font_file_name=font_path,
                     frame_width_px=widget.get("frameWidthPx", 0),
-                    font_size_ratio=widget.get("fontScale", 90) / 100.0,
+                    font_size_ratio=_font_size_ratio(widget),
                     align=Direction(widget.get("align", "left")),
                 )
             )
