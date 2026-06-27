@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 
 # Libusb cache invalidation is normally driven by `usb_power.power_on()`, so
 # scans rely on the cache being already-fresh from the last power transition.
-# We refresh it from this read path in exactly one case — recovering a stale
-# context after a re-enumeration (see `_list_real_printers`) — and only when
-# uhubctl confirms the device is physically present. That gate is what keeps
-# us from triggering the kernel hub auto-resume that would re-energize a
-# deliberately powered-off port. See `usb_power.invalidate_libusb_cache`.
+# We also refresh it from this read path to recover a stale context after a
+# re-enumeration — both when listing (`_list_real_printers`) and when resolving
+# a print request (`_resolve_device`) — but only when uhubctl confirms the
+# device is physically present. That gate is what keeps us from triggering the
+# kernel hub auto-resume that would re-energize a deliberately powered-off
+# port. See `usb_power.invalidate_libusb_cache`.
 
 
 def _printer_id(dev) -> str:
@@ -154,6 +155,58 @@ def list_printers() -> list[dict]:
     return printers
 
 
+def _scan_and_select(printer_id: str | None):
+    """Scan USB once and resolve to a device, or None if it isn't found.
+
+    Returns None both when the scan finds nothing and when an explicit
+    printer_id matches no attached device, so the caller can decide whether to
+    attempt stale-context recovery before giving up. Mirrors the resolution
+    logic list_printers uses, but yields the live device object the print path
+    needs rather than a descriptor dict.
+    """
+    device_manager = DeviceManager()
+    try:
+        device_manager.scan()
+        if printer_id:
+            return next(
+                (dev for dev in device_manager.devices if _printer_id(dev) == printer_id),
+                None,
+            )
+        return device_manager.find_and_select_device()
+    except DeviceManagerNoDevices:
+        return None
+
+
+def _resolve_device(printer_id: str | None):
+    """Resolve a print request to a live device, with stale-libusb recovery.
+
+    Same recovery as `_list_real_printers`: if the first scan doesn't resolve
+    the device but uhubctl still sees the DYMO, the cached libusb context is
+    likely stale after a re-enumeration — drop it and rescan once. The
+    `printer_attached()` gate also guarantees we never resume a deliberately
+    powered-off port (uhubctl reports no device there, so the gate is False).
+
+    Raises on failure so callers keep their existing semantics: an unmatched
+    explicit printer_id raises ValueError (propagated to the API), while an
+    auto-select miss raises DeviceManagerNoDevices (translated to the virtual
+    fallback). See #48.
+    """
+    device = _scan_and_select(printer_id)
+    if device is None and usb_power.printer_attached():
+        logger.info(
+            "Print scan didn't find the target printer but uhubctl still sees "
+            "the DYMO; refreshing the stale libusb context and rescanning."
+        )
+        usb_power.invalidate_libusb_cache()
+        device = _scan_and_select(printer_id)
+
+    if device is None:
+        if printer_id:
+            raise ValueError(f"Printer not found: {printer_id}")
+        raise DeviceManagerNoDevices("No supported devices found")
+    return device
+
+
 def print_label(
     widgets: list[dict], settings: dict, upload_dir: str = "", printer_id: str | None = None
 ) -> None:
@@ -177,18 +230,8 @@ def print_label(
         return
 
     # Try real USB printer
-    device = None
     try:
-        device_manager = DeviceManager()
-        device_manager.scan()
-
-        if printer_id:
-            matching_devices = [dev for dev in device_manager.devices if _printer_id(dev) == printer_id]
-            if not matching_devices:
-                raise ValueError(f"Printer not found: {printer_id}")
-            device = matching_devices[0]
-        else:
-            device = device_manager.find_and_select_device()
+        device = _resolve_device(printer_id)
     except Exception:
         # If a specific printer was requested but not found, don't fall back
         if printer_id:
@@ -253,17 +296,8 @@ def print_bitmap(
         return
 
     # Try real USB printer
-    device = None
     try:
-        device_manager = DeviceManager()
-        device_manager.scan()
-        if printer_id:
-            matching = [d for d in device_manager.devices if _printer_id(d) == printer_id]
-            if not matching:
-                raise ValueError(f"Printer not found: {printer_id}")
-            device = matching[0]
-        else:
-            device = device_manager.find_and_select_device()
+        device = _resolve_device(printer_id)
     except Exception:
         if printer_id:
             raise

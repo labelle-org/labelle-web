@@ -273,6 +273,136 @@ class TestStaleLibusbContextRecovery:
         assert result == []
 
 
+class TestPrintStaleLibusbContextRecovery:
+    """The same stale-libusb-context failure that empties list_printers() also
+    breaks the *print* path: print_label / print_bitmap scan for the requested
+    device and, with a stale context, find nothing (or the wrong device) even
+    though the printer is physically attached. They must recover the same way
+    list_printers() does — refresh the cache and rescan once, gated on uhubctl
+    confirming the DYMO is still present. See #48."""
+
+    @patch("printer_service.usb_power")
+    @patch("printer_service.render_payload")
+    @patch("printer_service.DymoLabeler")
+    @patch("printer_service.DeviceManager")
+    def test_print_label_recovers_when_printer_still_attached(
+        self, mock_dm_cls, mock_labeler_cls, mock_render, mock_usb_power,
+        sample_widgets, sample_settings,
+    ):
+        from labelle.lib.devices.device_manager import DeviceManagerNoDevices
+
+        dev = _fake_device(serial="ABC123")
+        mock_dm = MagicMock()
+        # First scan: stale context sees nothing. After cache invalidation the
+        # second scan re-enumerates and the device reappears.
+        mock_dm.scan.side_effect = [DeviceManagerNoDevices("none"), None]
+        mock_dm.devices = [dev]
+        mock_dm_cls.return_value = mock_dm
+        mock_usb_power.printer_attached.return_value = True
+
+        from printer_service import print_label
+
+        print_label(sample_widgets, sample_settings, printer_id="serial:ABC123")
+
+        mock_usb_power.invalidate_libusb_cache.assert_called_once()
+        dev.setup.assert_called_once()
+        mock_labeler_cls.return_value.print.assert_called_once()
+
+    @patch("printer_service.usb_power")
+    @patch("printer_service.DeviceManager")
+    def test_print_label_no_refresh_when_uhubctl_does_not_see_printer(
+        self, mock_dm_cls, mock_usb_power, sample_widgets, sample_settings,
+    ):
+        """Powered-off / genuinely-absent: don't touch the libusb cache, and
+        surface the same "Printer not found" the caller already handles."""
+        from labelle.lib.devices.device_manager import DeviceManagerNoDevices
+
+        mock_dm = MagicMock()
+        mock_dm.scan.side_effect = DeviceManagerNoDevices("none")
+        mock_dm_cls.return_value = mock_dm
+        mock_usb_power.printer_attached.return_value = False
+
+        from printer_service import print_label
+
+        with pytest.raises(ValueError, match="Printer not found"):
+            print_label(sample_widgets, sample_settings, printer_id="serial:ABC123")
+
+        mock_usb_power.invalidate_libusb_cache.assert_not_called()
+
+    @patch("printer_service.usb_power")
+    @patch("printer_service.render_payload")
+    @patch("printer_service.DymoLabeler")
+    @patch("printer_service.DeviceManager")
+    def test_print_label_no_uhubctl_probe_on_successful_first_scan(
+        self, mock_dm_cls, mock_labeler_cls, mock_render, mock_usb_power,
+        sample_widgets, sample_settings,
+    ):
+        """The happy path must not consult uhubctl or refresh the cache."""
+        dev = _fake_device(serial="ABC123")
+        mock_dm = MagicMock()
+        mock_dm.devices = [dev]
+        mock_dm_cls.return_value = mock_dm
+
+        from printer_service import print_label
+
+        print_label(sample_widgets, sample_settings, printer_id="serial:ABC123")
+
+        mock_usb_power.printer_attached.assert_not_called()
+        mock_usb_power.invalidate_libusb_cache.assert_not_called()
+
+    @patch("printer_service.usb_power")
+    @patch("printer_service.DymoLabeler")
+    @patch("printer_service.DeviceManager")
+    def test_print_bitmap_recovers_when_printer_still_attached(
+        self, mock_dm_cls, mock_labeler_cls, mock_usb_power, sample_settings,
+    ):
+        """print_bitmap is the path that actually failed in the field (the
+        cut-mark print goes through it)."""
+        from PIL import Image
+        from labelle.lib.devices.device_manager import DeviceManagerNoDevices
+
+        dev = _fake_device(serial="ABC123")
+        mock_dm = MagicMock()
+        mock_dm.scan.side_effect = [DeviceManagerNoDevices("none"), None]
+        mock_dm.devices = [dev]
+        mock_dm_cls.return_value = mock_dm
+        mock_usb_power.printer_attached.return_value = True
+
+        from printer_service import print_bitmap
+
+        print_bitmap(Image.new("1", (8, 8)), sample_settings, printer_id="serial:ABC123")
+
+        mock_usb_power.invalidate_libusb_cache.assert_called_once()
+        dev.setup.assert_called_once()
+        mock_labeler_cls.return_value.print.assert_called_once()
+
+    @patch("printer_service.usb_power")
+    @patch("printer_service.render_payload")
+    @patch("printer_service.DymoLabeler")
+    @patch("printer_service.DeviceManager")
+    def test_auto_select_recovers_when_printer_still_attached(
+        self, mock_dm_cls, mock_labeler_cls, mock_render, mock_usb_power,
+        sample_widgets, sample_settings,
+    ):
+        """Auto-select (printer_id=None) resolves via find_and_select_device;
+        it too must recover from a stale context rather than wrongly falling
+        back to a virtual printer when the real one is attached."""
+        from labelle.lib.devices.device_manager import DeviceManagerNoDevices
+
+        dev = _fake_device(serial="ABC123")
+        mock_dm = MagicMock()
+        mock_dm.find_and_select_device.side_effect = [DeviceManagerNoDevices("none"), dev]
+        mock_dm_cls.return_value = mock_dm
+        mock_usb_power.printer_attached.return_value = True
+
+        from printer_service import print_label
+
+        print_label(sample_widgets, sample_settings, printer_id=None)
+
+        mock_usb_power.invalidate_libusb_cache.assert_called_once()
+        dev.setup.assert_called_once()
+
+
 class TestAutoSelectWithVirtualPrinters:
     @patch("printer_service.DeviceManager")
     def test_auto_select_falls_back_to_virtual_printer(

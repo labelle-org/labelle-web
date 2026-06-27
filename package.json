@@ -1,6 +1,6 @@
 {
   "name": "labelle-web",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "private": true,
   "description": "Web interface for labelle DYMO label printers",
   "scripts": {
